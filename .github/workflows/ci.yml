@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-check:
+    name: node --check (lib + public + samples)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # The plugin has zero npm dependencies. The actions/setup-node
+          # step is here so the workflow stays in a known Node runtime,
+          # but `npm install` is intentionally not run.
+
+      - name: Syntax check every .js and .mjs file
+        run: |
+          set -e
+          shopt -s globstar nullglob
+          ok=0
+          fail=0
+          for f in **/*.js **/*.mjs; do
+            # skip anything inside node_modules even though it shouldn't exist
+            case "$f" in node_modules/*) continue;; esac
+            if node --check "$f" 2>/tmp/err; then
+              ok=$((ok + 1))
+            else
+              echo "::error file=$f::$(cat /tmp/err)"
+              fail=$((fail + 1))
+            fi
+          done
+          echo "checked=$ok failed=$fail"
+          if [ "$fail" -ne 0 ]; then exit 1; fi
