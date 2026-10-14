@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+*.log
+.workspace-lock
+
+# dev helpers (not part of the published plugin)
+dev-smoke.mjs
+dev-probe-gcm.ps1

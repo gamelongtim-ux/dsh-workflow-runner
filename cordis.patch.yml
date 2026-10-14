@@ -1,0 +1,7 @@
+# dsh-workflow-runner bundle patch：在 dsh 自带 Web 服务上挂 /workflow
+# 前缀路由；不需要修改默认配置。最少一行即可工作。
+- insert:
+    - id: dsh-workflow-runner
+      name: dsh-workflow-runner
+      config:
+        path: /workflow

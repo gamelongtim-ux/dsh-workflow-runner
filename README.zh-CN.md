@@ -1,0 +1,153 @@
+# dsh-workflow-runner
+
+把 ZCode 风格的 **dynamic-workflows** 语义搬进 [dsh][dsh] Web UI。
+写一小段 JS workflow 脚本,使用顶层 await 友好的 facade
+(`phase` / `log` / `report` / `agent(name).ask(prompt)` / `world.run(cmd, args)`),
+插件把它跑在隔离的 Node 子进程里,实时把进度广播到聊天输入区按钮、每轮尾巴卡片和浮动监控点上。
+
+[dsh]: https://github.com/deepseek-ai/dsh
+
+> **目标宿主**:dsh **桌面版** profile,**V0.2.0-rc.2** 及以上版本。
+> 与 [`dsh-agent-teams`][dteams] 完全独立 —— 不依赖它,不与之协作,卸了它本插件照常工作。
+[dteams]: https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams
+
+## 你会拿到
+
+- **三个 UI slot**(通过 cordis 注册):
+  - `conversation.composer.dock` —— `▶ Workflow` 按钮(点击在新窗口打开编辑器)
+  - `conversation.chat.turnTail` —— 每轮 assistant 尾巴下的被动监控卡
+  - `shell.overlay` —— 运行中时右上角的浮动小点
+
+- **standalone Web 应用**(`/workflow/` 路径),含:
+  - 脚本选择器(三个样本)、文件路径、源码预览
+  - `▶ Run` / `◼ Stop` 按钮
+  - 实时 phase 进度、子代理活动、报告列表、事件日志
+
+- **服务端运行时**:spawn 用户脚本为 Node 子进程,stdin/stdout 上跑 JSON-RPC,使用与 dsh `balance` 同样的 key 解析路径调 DeepSeek chat-completion,跑 shell 命令并有可控超时。
+
+## 安装
+
+把插件按 dsh bundle 标准装入。从 dsh 宿主(它跑在 WSL)执行,**desktop** profile:
+
+```bash
+git clone https://github.com/gamelongtim-ux/dsh-workflow-runner.git
+cd dsh-workflow-runner
+dsh plugin --profile desktop add file:"$PWD"
+```
+
+然后重启 `dsh web`。聊天输入区里能看到 `▶ Workflow` 按钮。
+
+> 📌 如果同版本 pnpm `add file:` 不重新拷贝(pnpm 12 的怪行为),改 `package.json` 里的 `version`,或者直接用 `update.cmd`。
+
+## 独立运行(不需要 dsh)
+
+测脚本很好用:
+
+```bash
+node lib/standalone.js          # 监听 127.0.0.1:7910
+```
+
+浏览器开 <http://127.0.0.1:7910/>,选个样本即可。
+
+## 写一个 workflow
+
+脚本是 **ES module** (`.mjs`),默认导出 `async function main()`:
+
+```js
+'use strict';
+const { agent, world, phase, log, report } = globalThis.__dsh;
+
+export default async function main() {
+  phase('Plan');
+  const draft = await agent('planner', {
+    system: 'You are a senior algorithm textbook author.',
+  }).ask('用三段话解释匈牙利算法');
+
+  phase('Critique');
+  const issues = await agent('critic', {
+    system: '列出 3 个最关键遗漏,每个 ≤25 字。',
+  }).ask(draft);
+
+  phase('Gate');
+  const wc = await world.run('node', ['-e',
+    'process.stdout.write(String(arguments[0].split(/\\s+/).filter(Boolean).length))',
+    '--', draft,
+  ], { timeoutMs: 5000 });
+  if (wc.exitCode !== 0) log('gate 警告 exit=' + wc.exitCode, 'warn');
+
+  report({ draft, issues, wordCount: Number(wc.stdout) }, 'final');
+  phase('Done');
+  return { ok: true };
+}
+```
+
+### Facade 参考
+
+| 调用 | 返回 | 备注 |
+| --- | --- | --- |
+| `phase(name)` | `Promise<{ok:true}>` | 标记一个 phase。所有已完成的 phase 都在 UI 列出 |
+| `log(message, level='info')` | `Promise<{ok:true}>` | 流到事件日志。`level` ∈ `info`, `warn`, `error`, `debug` |
+| `report(item, tag=null)` | `Promise<{ok:true}>` | 在 Reports 面板露出结构化项。`item` 可以是任意可 JSON 序列化的值 |
+| `agent(name, opts).ask(prompt)` | `Promise<{content, usage}>` | 按名创建(或复用)子代理;同名复用保留历史。`opts` ∈ `{system, model, temperature, maxTokens}` |
+| `agent(name).close()` | `Promise<{closed:true}>` | (可选)提示;历史随 run 结束释放 |
+| `world.run(cmd, args, opts)` | `Promise<{exitCode, signal, stdout, stderr, durationMs}>` | spawn 本地 shell 命令。**非零退出码是值,不抛异常**。`opts.cwd / env / timeoutMs` 可配 |
+
+> 第一个参数 `agent(name, opts)` 可只写 `agent('planner')`;`opts` 可省。
+
+## 样本
+
+`samples/` 里有三份:
+
+| 文件 | 模式 |
+| --- | --- |
+| `smoke.mjs` | phase + log + world.run + report —— 不调 LLM,可无 key 跑通 |
+| `planner-critic.mjs` | `planner` → `critic` → `planner` 同名复用带 critique 的修订 |
+| `fanout-summarize.mjs` | 三个并行 `summarizer-N`,再 `reducer` 汇总成 cheatsheet |
+
+## 架构
+
+```
+┌────────────────────┐   stdio 行分隔 JSON     ┌──────────────────────────┐
+│  用户 .mjs 脚本    │◀──── RPC + notify ─────▶│  Node 子进程             │
+│  (subprocess)      │                          │   runner-bootstrap.mjs  │
+└────────────────────┘                          └──────────┬───────────────┘
+                                                            │
+                                                            ▼
+                                                  ┌──────────────────────┐
+                                                  │  WorkflowRuntime      │
+                                                  │  (cordis 宿主)        │
+                                                  │                       │
+                                                  │  - agent 状态表       │
+                                                  │  - 通过 ctx 调 LLM    │
+                                                  │  - shell 调度         │
+                                                  │  - SSE 广播           │
+                                                  └──────┬───────┬────────┘
+                                                         │       │
+                              ┌──────────────────────────┘       └───────────────────────────┐
+                              ▼                                                                  ▼
+                   ┌──────────────────┐                                              ┌──────────────────┐
+                   │ webServer 路由   │                                              │ dsh 聊天 UI      │
+                   │ /workflow/api/*  │  ─ SSE 事件流 ──▶  ┌────────────┐        │ (三个 slot:       │
+                   │ /workflow/       │                    │  iframe     │       │ composer, turn-   │
+                   └──────────────────┘                    │  editor +   │       │ tail, overlay)    │
+                                                            │  viewer     │       └──────────────────┘
+                                                            └────────────┘
+```
+
+LLM 子代理直接打 DeepSeek `/v1/chat/completions`,优先通过 `ctx.llm.resolveCallConfig(...)` 取,
+回退到与 [`dsh-usage-dashboard` 的 balance 模块][usage-dash-balance] 完全一致的
+`DEEPSEEK_API_KEY` / `$DSH_HOME/.credentials.yaml` 解析路径。
+
+[usage-dash-balance]: https://github.com/gamelongtim-ux/dsh-usage-dashboard
+
+## 显式不做
+
+- TypeScript 类型检查 —— 只用 JS + JSDoc
+- `hole<T>()` 运行中人工接管 —— 没有交互模式
+- 缓存复用 amend —— 改脚本要重跑
+- Settings → Plugins 上的 Plugin configuration 卡片
+- 运行历史持久化 —— 仅内存保存,关 dsh 即丢
+
+## 协议
+
+MIT

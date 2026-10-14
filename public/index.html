@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>dsh workflow runner</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="page">
+  <header class="hero">
+    <h1>dsh <span>workflow</span> runner</h1>
+    <p class="hint">
+      Write a script with <code>phase · log · report · agent(name).ask(prompt) · world.run(cmd,args)</code>.
+      The script runs in a Node child process; sub-agents hit DeepSeek via your dsh key; live progress streams here.
+    </p>
+  </header>
+
+  <section class="picker card">
+    <h2>1 · Pick a script</h2>
+    <p class="muted">
+      Two sample workflows ship with the plugin (under <code>samples/</code>); paste an absolute path below
+      and press Load to view its source. Then Run to execute it.
+    </p>
+    <div class="samples-row">
+      <button data-sample="smoke">smoke.mjs</button>
+      <button data-sample="planner">planner-critic.mjs</button>
+      <button data-sample="fanout">fanout-summarize.mjs</button>
+    </div>
+    <div class="row">
+      <input id="scriptPath" type="text" placeholder="absolute path to .mjs" />
+      <button id="loadBtn">Load</button>
+    </div>
+    <textarea id="scriptSource" spellcheck="false" placeholder="(loaded script appears here)"></textarea>
+    <div class="row">
+      <button id="runBtn" class="primary">▶ Run</button>
+      <button id="stopBtn" class="danger" disabled>◼ Stop</button>
+      <span id="runStatus" class="muted">idle</span>
+    </div>
+  </section>
+
+  <section class="viewer card" id="viewerCard" hidden>
+    <h2>2 · Live progress <span id="runIdBadge" class="badge"></span></h2>
+    <div class="row" id="phaseBar"></div>
+    <div class="row">
+      <div class="col">
+        <h3>Sub-agents</h3>
+        <div id="agentsList" class="list"></div>
+      </div>
+      <div class="col">
+        <h3>Reported items</h3>
+        <div id="reportsList" class="list"></div>
+      </div>
+    </div>
+    <h3>Event log</h3>
+    <pre id="logView"></pre>
+  </section>
+
+  <script type="module" src="./editor.js"></script>
+</body>
+</html>
