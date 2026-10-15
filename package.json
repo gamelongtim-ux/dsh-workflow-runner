@@ -1,6 +1,6 @@
 {
   "name": "dsh-workflow-runner",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Bring ZCode-style dynamic-workflows semantics into dsh: write JS workflow scripts that spawn parallel LLM agents and shell gates; live progress streams to the chat UI as overlay cards.",
   "license": "MIT",
   "keywords": [
@@ -43,9 +43,6 @@
     "url": "https://github.com/gamelongtim-ux/dsh-workflow-runner/issues"
   },
   "homepage": "https://github.com/gamelongtim-ux/dsh-workflow-runner#readme",
-  "peerDependencies": {
-    "@deepseek-ai/schemastery": "*"
-  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
