@@ -46,6 +46,21 @@ Then restart `dsh web` and look for the `▶ Workflow` button in the chat compos
 > 📌 If pnpm refuses to re-copy on the same version (a pnpm 12 `add file:`
 > quirk), bump `version` in `package.json` or use `update.cmd`.
 
+## Sharing this plugin with other dsh users
+
+There are three install paths; pick the one that matches the audience you are
+handing the URL to.
+
+| Path | What the user pastes in dsh's "添加插件" dialog | Notes |
+| --- | --- | --- |
+| **GitHub URL** *(currently used)* | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | Always available; pulls the latest `main` HEAD. |
+| **Local path** | `<absolute path to a cloned checkout>` | Best for users who want to follow your local edits; pair with [`update.cmd`](#updating-after-local-edits). |
+| **npm name** *(not yet published)* | `dsh-workflow-runner` | Faster in China through npm's mirror, locks a version, but requires the maintainer to publish to npmjs.org first. |
+
+> The dsh desktop install dialog also has a "中国大陆镜像源" dropdown —
+> that mirror is a read-side accelerator; the package itself must still be
+> reachable on GitHub (or npmjs.org).
+
 ## Standalone (no dsh required)
 
 Useful for testing scripts without involving the dsh host:

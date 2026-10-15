@@ -39,6 +39,18 @@ dsh plugin --profile desktop add file:"$PWD"
 
 > 📌 如果同版本 pnpm `add file:` 不重新拷贝(pnpm 12 的怪行为),改 `package.json` 里的 `version`,或者直接用 `update.cmd`。
 
+## 把这个插件给其他 dsh 用户用
+
+下游 dsh 用户在"添加插件"对话框里有三种装入路径,看你打算怎么分发来选:
+
+| 路径 | 在 dsh "添加插件"对话框里粘贴 | 备注 |
+| --- | --- | --- |
+| **GitHub URL** *(当前在用)* | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | 永远可用;拉的是最新 `main` HEAD |
+| **本地路径** | `<本地 clone 的绝对路径>` | 想跟你的本地编辑同步改;搭配 [`update.cmd`](#修改后更新) |
+| **npm 包名** *(暂未发到 npm)* | `dsh-workflow-runner` | 国内走镜像源更快、可锁版本,但要先有维护者发到 npmjs.org |
+
+> dsh 桌面"添加插件"对话框里的"中国大陆镜像源"是**读端加速**;包本身还得能经 GitHub(或 npmjs.org)拿到。
+
 ## 独立运行(不需要 dsh)
 
 测脚本很好用:
