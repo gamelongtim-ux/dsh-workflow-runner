@@ -34,12 +34,20 @@
 把插件按 dsh bundle 标准装入。从 dsh 宿主(它跑在 WSL)执行,**desktop** profile:
 
 ```bash
+dsh plugin --profile desktop add dsh-workflow-runner
+```
+
+这会装 npm 上的正式发布版。想跟这个仓库的最新 `main`:
+
+```bash
 git clone https://github.com/gamelongtim-ux/dsh-workflow-runner.git
 cd dsh-workflow-runner
 dsh plugin --profile desktop add file:"$PWD"
 ```
 
 然后重启 `dsh web`。聊天输入区里能看到 `▶ Workflow` 按钮。
+
+要求 **dsh 0.2.0-rc.2 及以上**——已声明为 `engines.dsh`,插件市场能据此显示宿主版本要求,而不是"未声明"。
 
 > 📌 如果同版本 pnpm `add file:` 不重新拷贝(pnpm 12 的怪行为),改 `package.json` 里的 `version`,或者直接用 `update.cmd`。
 
@@ -49,11 +57,15 @@ dsh plugin --profile desktop add file:"$PWD"
 
 | 路径 | 在 dsh "添加插件"对话框里粘贴 | 备注 |
 | --- | --- | --- |
-| **GitHub URL** *(当前在用)* | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | 永远可用;拉的是最新 `main` HEAD |
-| **本地路径** | `<本地 clone 的绝对路径>` | 想跟你的本地编辑同步改;搭配 [`update.cmd`](#修改后更新) |
-| **npm 包名** *(暂未发到 npm)* | `dsh-workflow-runner` | 国内走镜像源更快、可锁版本,但要先有维护者发到 npmjs.org |
+| **npm 包名** *(默认)* | `dsh-workflow-runner` | 自 **0.1.5** 起已发到 npmjs.org。国内走镜像源更快,且能锁版本 |
+| **GitHub URL** | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | 永远可用;拉的是最新 `main` HEAD,而不是已发布版本 |
+| **本地路径** | `<本地 clone 的绝对路径>` | 想跟你的本地编辑同步改;搭配 `update.cmd` |
 
-> dsh 桌面"添加插件"对话框里的"中国大陆镜像源"是**读端加速**;包本身还得能经 GitHub(或 npmjs.org)拿到。
+> dsh 桌面"添加插件"对话框里的"中国大陆镜像源"是**读端加速**;包本身还得能经 npmjs.org(或 GitHub)拿到。
+
+### 版本兼容性
+
+npm manifest 里用 `engines.dsh` 声明宿主版本要求,dsh 插件市场读这个字段(以及 lockstep 的 `@deepseek-ai/dsh-*` peer)来标注卡片是"兼容"还是"不兼容"。`dsh.compatibility.dshReleases` 也一并声明,作为面向作者的元数据。dsh 自身在加载时**只强制检查 `peerDependencies`**,所以本包刻意**不**声明任何 `@deepseek-ai/dsh-*` peer:它只需要 base bundle 提供的挂载点与服务,声明宿主 peer 范围反而可能误拒一个实际可用的宿主。
 
 ## 独立运行(不需要 dsh)
 
@@ -164,12 +176,22 @@ LLM 子代理直接打 DeepSeek `/v1/chat/completions`,优先通过 `ctx.llm.res
 
 ### 装完没看到 `▶ Workflow` 按钮
 
-按这个顺序排查:
+在 **v0.1.5** 修复了。根因是包里混进了一个多余的 `lib/package.json`:dsh 的 `dsh.client` 扫描从解析到的入口(`lib/plugin.js`)向上找最近的 manifest,命中了这个 shadow 文件,于是把客户端 bundle 路径算成 `lib/lib/client.js`——该文件不存在。浏览器半边就这样被**静默丢弃**(UI 上没有任何报错),而服务端半边照常工作(所以 `/workflow/api/*` 有响应、聊天区里却什么都没挂上)。如果你在 v0.1.4 或更早,从 npm 或 GitHub 重装到 v0.1.5;手动删掉那个 shadow 文件也有效。
+
+其余情况按这个顺序排查:
 
 1. **插件**页里有 `dsh-workflow-runner` 且**开关是开**的
 2. 拨完开关后**重启 dsh**(`任务管理器` → `DeepSeek Harness.exe` → 结束任务 → 重开)。bundle 是在进程启动时加载,不是拨开关时。
 3. 你在**新会话**里看(左下角 → 新会话),不是装插件之前打开的老会话
-4. dsh 桌面版是 **V0.2.0-rc.2 或以上**——老版本可能没有 `conversation.composer.dock` 这个 slot
+4. dsh 桌面版是 **V0.2.0-rc.2 或以上**——已声明为 `engines.dsh`;老版本可能没有 `conversation.composer.dock` 这个 slot
+
+### 打开 `/workflow` 报 `ERR_TOO_MANY_REDIRECTS`
+
+在 **v0.1.5** 修复了。`/workflow` 和 `/workflow/` 原本都 302 到 `/workflow/`,于是带斜杠那个自己跳自己,永远跳不完。修复后 `/workflow/` 直接返回 `index.html`,只有不带斜杠的 `/workflow` 会重定向。
+
+### 页面能开,但 Load / Run / Stop 点了没反应
+
+在 **v0.1.5** 修复了。编辑页 `public/editor.js` 原本用根路径 `/api/*` 调接口,而在 dsh 下这些请求会打到 dsh 自己的 API 网关并返回 **401**。现在接口基址从模块自身 URL 推导,所以 dsh 前缀路由和独立模式(站点根)都能用。
 
 ### "Lockfile failed supply-chain policy check" / `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`
 

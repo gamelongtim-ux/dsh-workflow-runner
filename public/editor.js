@@ -15,6 +15,15 @@ const SAMPLES = {
   fanout:   'samples/fanout-summarize.mjs',
 };
 
+// dsh mounts this page under a route prefix (default /workflow) and keeps the
+// JSON API right beside it, while lib/standalone.js serves the very same page
+// at the site root. This module is always served next to the page, so deriving
+// the base from its own URL makes both mounts work. Before this, the calls were
+// root-absolute ('/api/run'): standalone worked, but under dsh they hit the
+// host's own /api gateway and came back 401, leaving Load/Run/Stop dead.
+const API_BASE = new URL('.', import.meta.url).pathname.replace(/\/+$/, '');
+const api = (path) => API_BASE + '/api' + path;
+
 const $ = (id) => document.getElementById(id);
 
 const els = {
@@ -137,7 +146,7 @@ function escapeHtml(s) {
 // ----- form wiring -----
 
 async function loadScript(path) {
-  const res = await fetch('/api/script-content', {
+  const res = await fetch(api('/script-content'), {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ scriptPath: path }),
   });
@@ -158,7 +167,7 @@ for (const btn of document.querySelectorAll('[data-sample]')) {
     if (!rel) return;
     // Resolve relative path against the plugin directory which plugin.js serves statically.
     // We compute an absolute path by reading /api/samples hint.
-    fetch('/api/samples').then((r) => r.json()).then(({ samplesDir }) => {
+    fetch(api('/samples')).then((r) => r.json()).then(({ samplesDir }) => {
       const abs = samplesDir.replace(/\\/g, '/') + '/' + rel.split('/').pop();
       els.path.value = abs;
       loadScript(abs);
@@ -192,7 +201,7 @@ els.runBtn.addEventListener('click', async () => {
   els.runBtn.disabled = true;
   els.stopBtn.disabled = false;
   try {
-    const res = await fetch('/api/run', {
+    const res = await fetch(api('/run'), {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ scriptPath }),
     });
@@ -204,7 +213,7 @@ els.runBtn.addEventListener('click', async () => {
     currentRunId = j.runId;
     els.runIdBadge.textContent = shortRunId();
     if (currentStream) { try { currentStream.close(); } catch (_) {} currentStream = null; }
-    currentStream = new EventSource('/api/stream?runId=' + currentRunId);
+    currentStream = new EventSource(api('/stream') + '?runId=' + currentRunId);
     currentStream.onmessage = (msg) => {
       let evt; try { evt = JSON.parse(msg.data); } catch (_) { return; }
       onEvent(evt);
@@ -221,7 +230,7 @@ els.runBtn.addEventListener('click', async () => {
 
 els.stopBtn.addEventListener('click', async () => {
   if (!currentRunId) return;
-  await fetch('/api/stop', {
+  await fetch(api('/stop'), {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ runId: currentRunId }),
   });
@@ -236,7 +245,7 @@ async function onEvent(evt) {
     } else if (evt.status) {
       setStatus(evt.status, 'status-' + evt.status);
       // refresh snapshot on status change
-      fetch('/api/state?runId=' + currentRunId).then((r) => r.json()).then((snap) => {
+      fetch(api('/state') + '?runId=' + currentRunId).then((r) => r.json()).then((snap) => {
         renderPhases(snap); renderAgents(snap); renderReports(snap);
         if (snap.status === 'completed' || snap.status === 'error' || snap.status === 'stopped') {
           els.runBtn.disabled = false;
@@ -250,7 +259,7 @@ async function onEvent(evt) {
   }
   if (evt.event === 'phase') {
     // refresh snapshot to keep phase bar current
-    fetch('/api/state?runId=' + currentRunId).then((r) => r.json()).then((snap) => {
+    fetch(api('/state') + '?runId=' + currentRunId).then((r) => r.json()).then((snap) => {
       renderPhases(snap);
     }).catch(() => {});
     return;
@@ -260,13 +269,13 @@ async function onEvent(evt) {
     return;
   }
   if (evt.event === 'report') {
-    fetch('/api/state?runId=' + currentRunId).then((r) => r.json()).then((snap) => {
+    fetch(api('/state') + '?runId=' + currentRunId).then((r) => r.json()).then((snap) => {
       renderReports(snap);
     }).catch(() => {});
     return;
   }
   if (evt.event === 'agent.new' || evt.event === 'agent.ask.start' || evt.event === 'agent.ask.done') {
-    fetch('/api/state?runId=' + currentRunId).then((r) => r.json()).then((snap) => {
+    fetch(api('/state') + '?runId=' + currentRunId).then((r) => r.json()).then((snap) => {
       renderAgents(snap);
     }).catch(() => {});
     return;

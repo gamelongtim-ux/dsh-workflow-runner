@@ -1,6 +1,6 @@
 {
   "name": "dsh-workflow-runner",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Bring ZCode-style dynamic-workflows semantics into dsh: write JS workflow scripts that spawn parallel LLM agents and shell gates; live progress streams to the chat UI as overlay cards.",
   "license": "MIT",
   "keywords": [
@@ -13,6 +13,9 @@
     "orchestration",
     "llm"
   ],
+  "engines": {
+    "dsh": ">=0.2.0-rc.2"
+  },
   "type": "module",
   "main": "./lib/plugin.js",
   "exports": {
@@ -28,6 +31,7 @@
     "public",
     "samples",
     "cordis.patch.yml",
+    "CHANGELOG.md",
     "README.md",
     "README.zh-CN.md",
     "LICENSE"
@@ -50,6 +54,11 @@
     "client": {
       "platform": "web",
       "inject": []
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.0-rc.2": "compatible"
+      }
     }
   }
 }

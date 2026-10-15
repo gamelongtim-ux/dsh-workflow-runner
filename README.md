@@ -40,12 +40,21 @@ The plugin is a normal dsh bundle. From the dsh host (WSL where dsh itself runs)
 in the **desktop** profile:
 
 ```bash
+dsh plugin --profile desktop add dsh-workflow-runner
+```
+
+That pulls the published npm release. To track this repository instead:
+
+```bash
 git clone https://github.com/gamelongtim-ux/dsh-workflow-runner.git
 cd dsh-workflow-runner
 dsh plugin --profile desktop add file:"$PWD"
 ```
 
 Then restart `dsh web` and look for the `▶ Workflow` button in the chat composer dock.
+
+Requires **dsh 0.2.0-rc.2 or newer** — declared as `engines.dsh`, so the plugin
+market can show the host requirement instead of "undeclared".
 
 > 📌 If pnpm refuses to re-copy on the same version (a pnpm 12 `add file:`
 > quirk), bump `version` in `package.json` or use `update.cmd`.
@@ -57,13 +66,24 @@ handing the URL to.
 
 | Path | What the user pastes in dsh's "添加插件" dialog | Notes |
 | --- | --- | --- |
-| **GitHub URL** *(currently used)* | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | Always available; pulls the latest `main` HEAD. |
-| **Local path** | `<absolute path to a cloned checkout>` | Best for users who want to follow your local edits; pair with [`update.cmd`](#updating-after-local-edits). |
-| **npm name** *(not yet published)* | `dsh-workflow-runner` | Faster in China through npm's mirror, locks a version, but requires the maintainer to publish to npmjs.org first. |
+| **npm name** *(default)* | `dsh-workflow-runner` | Published on npmjs.org since **0.1.5**. Fastest in China through npm's mirror, and locks a version. |
+| **GitHub URL** | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | Always available; pulls the latest `main` HEAD rather than a released version. |
+| **Local path** | `<absolute path to a cloned checkout>` | Best for users who want to follow your local edits; pair with `update.cmd`. |
 
 > The dsh desktop install dialog also has a "中国大陆镜像源" dropdown —
 > that mirror is a read-side accelerator; the package itself must still be
-> reachable on GitHub (or npmjs.org).
+> reachable on npmjs.org (or GitHub).
+
+### Version compatibility
+
+The npm manifest declares the host requirement in `engines.dsh`; dsh's plugin
+market reads that field (alongside any lockstep `@deepseek-ai/dsh-*` peers) to
+label a card compatible or incompatible. `dsh.compatibility.dshReleases` is
+also declared as author-facing metadata. dsh itself enforces only
+`peerDependencies` at load time, so this package deliberately declares **no**
+`@deepseek-ai/dsh-*` peers: it just needs the mount points and services the
+base bundle provides, and a host peer range would risk rejecting a host that
+works fine.
 
 ## Standalone (no dsh required)
 
@@ -181,7 +201,16 @@ dependencies.
 
 ### `▶ Workflow` button does not appear after install
 
-Check in order:
+Fixed in **v0.1.5**. The cause was a stray `lib/package.json` inside the
+package: dsh's `dsh.client` scan walks up from the resolved entry
+(`lib/plugin.js`) to the nearest manifest, found that shadow file, and computed
+the client bundle path as `lib/lib/client.js` — which does not exist. The
+browser half was therefore dropped silently, with no error in the UI, while the
+server half kept working (so `/workflow/api/*` responded but nothing was
+mounted in the chat). If you are on v0.1.4 or earlier, reinstall from npm or
+GitHub to get v0.1.5; deleting the shadow file by hand also works.
+
+Otherwise, check in order:
 
 1. The plugin entry exists in **插件** page and the toggle is **on**.
 2. dsh desktop is **restarted** after the toggle (Task Manager →
@@ -189,9 +218,15 @@ Check in order:
    process start, not on toggle.
 3. You're in a **new session** (左下角 → 新会话), not an old one
    that was opened before install.
-4. The host's dsh version is **V0.2.0-rc.2 or above** — older
-   versions may not have the `conversation.composer.dock` slot we
-   register against.
+4. The host's dsh version is **V0.2.0-rc.2 or above** — declared as
+   `engines.dsh`; older versions may not have the
+   `conversation.composer.dock` slot we register against.
+
+### `ERR_TOO_MANY_REDIRECTS` when opening `/workflow`
+
+Fixed in **v0.1.5**. Both `/workflow` and `/workflow/` redirected to
+`/workflow/`, so the slash form redirected to itself forever. The fix is to
+serve `index.html` for `/workflow/` directly; then only `/workflow` redirects.
 
 ### "Lockfile failed supply-chain policy check" / `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`
 
