@@ -1,5 +1,9 @@
 # dsh-workflow-runner
 
+<p align="right">
+  <a href="README.md">🇬🇧 English</a> · <a href="README.zh-CN.md">🇨🇳 中文</a>
+</p>
+
 Bring ZCode-style **dynamic-workflows** semantics into the [dsh][dsh] web UI.
 Write a small JS workflow script that uses top-level-await-friendly facade calls
 (`phase` / `log` / `report` / `agent(name).ask(prompt)` / `world.run(cmd, args)`)

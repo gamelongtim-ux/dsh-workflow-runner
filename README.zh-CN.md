@@ -1,5 +1,9 @@
 # dsh-workflow-runner
 
+<p align="right">
+  <a href="README.md">🇬🇧 English</a> · <a href="README.zh-CN.md">🇨🇳 中文</a>
+</p>
+
 把 ZCode 风格的 **dynamic-workflows** 语义搬进 [dsh][dsh] Web UI。
 写一小段 JS workflow 脚本,使用顶层 await 友好的 facade
 (`phase` / `log` / `report` / `agent(name).ask(prompt)` / `world.run(cmd, args)`),
