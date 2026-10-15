@@ -6,14 +6,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > **npm release note.** Versions up to and including **0.1.4** existed only as
 > git tags / GitHub `main`; the package name was never published to
-> registry.npmjs.org. **0.1.5 is the first version on npm.**
+> registry.npmjs.org. **0.1.5 was the first version on npm.**
+
+## [0.1.6] — 2026-10-15
+
+### Fixed
+
+- **`run failed: HTTP 401` on every Load / Run / Stop.** 0.1.5 introduced the
+  `/api/*` gate and treated *both* of `requestRejection()`'s refusals as a
+  denial. They are not equivalent:
+  - **403** is the Host/Origin fence rejecting a cross-site or DNS-rebinding
+    caller — the real protection against a web page driving the local server.
+  - **401** means the fence already **passed** and only dsh's browser-session
+    cookie is absent.
+
+  The editor is a self-mounted `/workflow` page, and dsh mints its session
+  cookie only for the root `/` token handshake, so that page can never present
+  one. Treating 401 as a denial therefore made the plugin's own UI permanently
+  unusable while adding no local security: the cookie's signing secret lives in
+  `$DSH_HOME/.credentials.yaml`, so any local process can mint a valid session
+  anyway. The gate now denies only non-401 refusals; 403 still always denies,
+  and a missing or throwing gate still fails closed with 503.
+
+### Verification
+
+Added a `no-session` mode to the offline harness — a stub `requestRejection`
+that returns 403 for a hostile Origin and 401 otherwise, mirroring the real
+service. 0.1.5 scores `no-session 5/8` (the three failures being
+`/api/list`, `/api/run` and `/api/samples` all answering 401, i.e. the reported
+bug); 0.1.6 scores `no-session 9/9`, with `cross-site`, `no-gate` and
+`throwing-gate` all still denying.
 
 ## [0.1.5] — 2026-10-15
 
 The first npm release. Fixes five defects that together made the plugin look
 "installed but broken": the editor page could not be opened at all, and the
 API behind it was both unreachable from the browser and unauthenticated.
-
 ### Fixed
 
 - **Editor page returned an infinite redirect.** `plugin.js` redirected both
@@ -112,6 +140,7 @@ answering **200** without authentication, which is the security fix above.
   `phase` / `log` / `report` / `agent().ask()` / `world.run()` facade, a
   live SSE progress view, and an editor page.
 
+[0.1.6]: https://github.com/gamelongtim-ux/dsh-workflow-runner/releases/tag/v0.1.6
 [0.1.5]: https://github.com/gamelongtim-ux/dsh-workflow-runner/releases/tag/v0.1.5
 [0.1.4]: https://github.com/gamelongtim-ux/dsh-workflow-runner/releases/tag/v0.1.4
 [0.1.3]: https://github.com/gamelongtim-ux/dsh-workflow-runner/releases/tag/v0.1.3

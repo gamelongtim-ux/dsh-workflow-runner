@@ -228,6 +228,30 @@ Fixed in **v0.1.5**. Both `/workflow` and `/workflow/` redirected to
 `/workflow/`, so the slash form redirected to itself forever. The fix is to
 serve `index.html` for `/workflow/` directly; then only `/workflow` redirects.
 
+### `run failed: HTTP 401` — the page opens but Load / Run / Stop always fail
+
+Fixed in **v0.1.6**. The `/api/*` gate treated both of `requestRejection()`'s
+refusals as a denial, but they are not equivalent:
+
+- **403** is the Host/Origin fence refusing a cross-site or DNS-rebinding
+  caller — the real protection, and it must always deny.
+- **401** means that fence already **passed**; only dsh's browser-session
+  cookie is missing.
+
+The editor is a self-mounted `/workflow` page, and dsh mints its session cookie
+only for the root `/` token handshake, so that page can never present one. As a
+consequence, honouring the 401 made the plugin's own UI unusable while adding no
+local protection: the cookie's signing secret lives in
+`$DSH_HOME/.credentials.yaml`, so any local process can mint a valid session
+regardless. If you are on v0.1.5, upgrade to v0.1.6.
+
+### `▶ Workflow` opens, but the browser shows a dsh login page
+
+That is the host's own auth, not this plugin's: dsh serves every page behind a
+process-launch token. Open the URL the host printed (the one carrying
+`?token=…`) so the shell mints a session cookie, then use the in-app
+`▶ Workflow` button rather than a bookmarked bare URL.
+
 ### "Lockfile failed supply-chain policy check" / `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`
 
 This is **not** caused by `dsh-workflow-runner` itself — the plugin

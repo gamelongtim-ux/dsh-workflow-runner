@@ -191,7 +191,20 @@ LLM 子代理直接打 DeepSeek `/v1/chat/completions`,优先通过 `ctx.llm.res
 
 ### 页面能开,但 Load / Run / Stop 点了没反应
 
-在 **v0.1.5** 修复了。编辑页 `public/editor.js` 原本用根路径 `/api/*` 调接口,而在 dsh 下这些请求会打到 dsh 自己的 API 网关并返回 **401**。现在接口基址从模块自身 URL 推导,所以 dsh 前缀路由和独立模式(站点根)都能用。
+分两种情况,请先看 `runStatus` 那一行或弹窗提示:
+
+**报了 `run failed: HTTP 401`,且表单里没有错误提示** —— 在 **v0.1.6** 修复。0.1.5 给 `/api/*` 加了防护,却把 `requestRejection()` 的两种拒绝当成了一回事。它们并不等价:
+
+- **403** 是 Host/Origin fence 判定"跨站 / DNS rebinding",这是**真正挡住网页 drive-by 的那一层**,必须一律拒绝;
+- **401** 表示 fence **已经通过**,只是请求没带 dsh 的浏览器会话 cookie。
+
+编辑页是自挂的 `/workflow` 静态页,而 dsh 只在根路径 `/` 的 token 握手上才下发会话 cookie,所以这个页面永远拿不到 cookie。把 401 也当作拒绝,就等于让插件自己的界面永久不可用,而且**没有增加任何本地防护**——cookie 的签名密钥就在 `$DSH_HOME/.credentials.yaml` 里,本地进程本来就能自己签一个。如果你在 v0.1.5,请升级到 v0.1.6。
+
+**报 404 / `not found` 或按钮完全没反应** —— 在 **v0.1.5** 修复。编辑页 `public/editor.js` 原本用根路径 `/api/*` 调接口,而在 dsh 下这些请求会打到 dsh 自己的 API 网关。现在接口基址从模块自身 URL 推导,所以 dsh 前缀路由和独立模式(站点根)都能用。
+
+### `▶ Workflow` 打开后显示的是 dsh 登录页
+
+那是**宿主自己的鉴权**,不是本插件的问题:dsh 把每个页面都放在进程启动令牌之后。请打开宿主启动时打印的那个带 `?token=…` 的网址,让壳子先拿到会话 cookie,然后从应用内的 `▶ Workflow` 按钮进入,不要用手写的裸地址。
 
 ### "Lockfile failed supply-chain policy check" / `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`
 
