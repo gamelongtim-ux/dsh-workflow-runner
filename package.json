@@ -1,7 +1,7 @@
 {
   "name": "dsh-workflow-runner",
-  "version": "0.1.1",
-  "description": "Bring ZCode-style dynamic-workflows to dsh: write JS workflow scripts that spawn parallel LLM agents and shell gates; live progress streams to the chat UI as overlay cards.",
+  "version": "0.1.2",
+  "description": "Bring ZCode-style dynamic-workflows semantics into dsh: write JS workflow scripts that spawn parallel LLM agents and shell gates; live progress streams to the chat UI as overlay cards.",
   "license": "MIT",
   "keywords": [
     "deepseek",
@@ -10,7 +10,8 @@
     "workflow",
     "agents",
     "cordis",
-    "orchestration"
+    "orchestration",
+    "llm"
   ],
   "type": "module",
   "main": "./lib/plugin.js",
@@ -22,6 +23,26 @@
     "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml"
   },
+  "files": [
+    "lib",
+    "public",
+    "samples",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gamelongtim-ux/dsh-workflow-runner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gamelongtim-ux/dsh-workflow-runner/issues"
+  },
+  "homepage": "https://github.com/gamelongtim-ux/dsh-workflow-runner#readme",
   "peerDependencies": {
     "@deepseek-ai/schemastery": "*"
   },
@@ -35,3 +56,4 @@
     }
   }
 }
+
