@@ -193,6 +193,40 @@ Check in order:
    versions may not have the `conversation.composer.dock` slot we
    register against.
 
+### "Lockfile failed supply-chain policy check" / `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`
+
+This is **not** caused by `dsh-workflow-runner` itself — the plugin
+has zero third-party runtime deps. pnpm's lockfile verifier checks
+**every** entry in the profile's lockfile against
+`minimumReleaseAge` and rejects any package published within the
+window (default 24h). The error names the offending package (e.g.
+`dsh-workbuddy-connect@0.7.5 was published at 2026-10-14T17:23Z`).
+
+Two ways out:
+
+- **Wait** until the offending package ages past the policy window
+  (typically 1-3 days), then retry the install.
+- **Bypass** with a manual copy that skips pnpm entirely:
+
+  ```powershell
+  $D = "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-workflow-runner"
+  $S = "D:\ZcodeStorage\.zcode\workspace\default\dsh-workflow-runner"
+  New-Item -ItemType Directory -Force -Path $D | Out-Null
+  Copy-Item "$S\lib","$S\public","$S\samples","$S\package.json","$S\cordis.patch.yml" `
+           -Recurse -Force -Destination $D
+  ```
+
+  Then **restart dsh**. If the plugin still doesn't appear in the
+  插件 page, add the cordis row to
+  `~/.dsh/profiles/desktop/cordis.patch.yml` manually:
+
+  ```yaml
+  - insert:
+      - id: dsh-workflow-runner
+        name: dsh-workflow-runner
+        config: { path: /workflow }
+  ```
+
 ## Out of scope (deliberate)
 
 - TypeScript typecheck — JS + JSDoc only.

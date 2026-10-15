@@ -171,6 +171,32 @@ LLM 子代理直接打 DeepSeek `/v1/chat/completions`,优先通过 `ctx.llm.res
 3. 你在**新会话**里看(左下角 → 新会话),不是装插件之前打开的老会话
 4. dsh 桌面版是 **V0.2.0-rc.2 或以上**——老版本可能没有 `conversation.composer.dock` 这个 slot
 
+### "Lockfile failed supply-chain policy check" / `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`
+
+**不是本插件本身的问题**——`dsh-workflow-runner` 零三方运行时依赖。pnpm 验 lockfile 时**整个 profile 的所有条目**都过 `minimumReleaseAge`,刚发的包(默认窗口 24h)直接拒。错误信息里点名的那个包(比如 `dsh-workbuddy-connect@0.7.5 was published at 2026-10-14T17:23Z`)才是元凶。
+
+两条路:
+
+- **等**那个包超过策略窗口(通常 1-3 天)再重试
+- **绕过 pnpm** 直接拷:
+
+  ```powershell
+  $D = "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-workflow-runner"
+  $S = "D:\ZcodeStorage\.zcode\workspace\default\dsh-workflow-runner"
+  New-Item -ItemType Directory -Force -Path $D | Out-Null
+  Copy-Item "$S\lib","$S\public","$S\samples","$S\package.json","$S\cordis.patch.yml" `
+           -Recurse -Force -Destination $D
+  ```
+
+  拷完**重启 dsh**。如果"插件"页还是没出现,手填 `~/.dsh/profiles/desktop/cordis.patch.yml`:
+
+  ```yaml
+  - insert:
+      - id: dsh-workflow-runner
+        name: dsh-workflow-runner
+        config: { path: /workflow }
+  ```
+
 ## 显式不做
 
 - TypeScript 类型检查 —— 只用 JS + JSDoc
