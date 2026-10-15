@@ -167,6 +167,32 @@ The LLM sub-agents call DeepSeek `/v1/chat/completions` directly through
 
 [usage-dash-balance]: https://github.com/gamelongtim-ux/dsh-usage-dashboard
 
+## Troubleshooting
+
+### "启用失败: dsh: warning: 1 entry did not activate dsh-workflow-runner (dsh-workflow-runner): failed to import"
+
+Fixed in **v0.1.3** by removing the `@deepseek-ai/schemastery` peer
+dependency. dsh's cordis loader resolves bare imports against the
+bundle's own `node_modules` first, and the schemastery hoisted to the
+host profile isn't always reachable on a fresh install. If you see
+this on v0.1.1 / v0.1.2, uninstall the bundle and reinstall via the
+GitHub URL — you'll get v0.1.3 which has zero third-party runtime
+dependencies.
+
+### `▶ Workflow` button does not appear after install
+
+Check in order:
+
+1. The plugin entry exists in **插件** page and the toggle is **on**.
+2. dsh desktop is **restarted** after the toggle (Task Manager →
+   `DeepSeek Harness.exe` → End task → reopen). Bundle load is at
+   process start, not on toggle.
+3. You're in a **new session** (左下角 → 新会话), not an old one
+   that was opened before install.
+4. The host's dsh version is **V0.2.0-rc.2 or above** — older
+   versions may not have the `conversation.composer.dock` slot we
+   register against.
+
 ## Out of scope (deliberate)
 
 - TypeScript typecheck — JS + JSDoc only.

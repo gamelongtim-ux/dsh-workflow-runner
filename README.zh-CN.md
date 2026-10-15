@@ -156,6 +156,21 @@ LLM 子代理直接打 DeepSeek `/v1/chat/completions`,优先通过 `ctx.llm.res
 
 [usage-dash-balance]: https://github.com/gamelongtim-ux/dsh-usage-dashboard
 
+## 排错
+
+### "启用失败: dsh: warning: 1 entry did not activate dsh-workflow-runner (dsh-workflow-runner): failed to import"
+
+在 **v0.1.3** 修复了——去掉了 `@deepseek-ai/schemastery` 这个 peer 依赖。dsh 的 cordis 加载器解析裸 import 时先在 bundle 自己的 `node_modules` 找,新装时 schemastery 提升到宿主 profile 不一定找得到。如果你装的是 v0.1.1 / v0.1.2,卸了重装 GitHub URL 那条,会拉到 v0.1.3,零三方依赖。
+
+### 装完没看到 `▶ Workflow` 按钮
+
+按这个顺序排查:
+
+1. **插件**页里有 `dsh-workflow-runner` 且**开关是开**的
+2. 拨完开关后**重启 dsh**(`任务管理器` → `DeepSeek Harness.exe` → 结束任务 → 重开)。bundle 是在进程启动时加载,不是拨开关时。
+3. 你在**新会话**里看(左下角 → 新会话),不是装插件之前打开的老会话
+4. dsh 桌面版是 **V0.2.0-rc.2 或以上**——老版本可能没有 `conversation.composer.dock` 这个 slot
+
 ## 显式不做
 
 - TypeScript 类型检查 —— 只用 JS + JSDoc
