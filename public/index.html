@@ -18,42 +18,183 @@
   <section class="picker card">
     <h2>1 · Pick a script</h2>
     <p class="muted">
-      Two sample workflows ship with the plugin (under <code>samples/</code>); paste an absolute path below
-      and press Load to view its source. Then Run to execute it.
+      Bundled samples under <code>samples/</code>; paste an absolute path or pick a saved workflow below.
+      Press Load to view source, Run to execute.
     </p>
     <div class="samples-row">
       <button data-sample="smoke">smoke.mjs</button>
       <button data-sample="planner">planner-critic.mjs</button>
       <button data-sample="fanout">fanout-summarize.mjs</button>
+      <button data-sample="artifact">artifact-demo.mjs</button>
+      <button data-sample="confirm">confirm-demo.mjs</button>
+      <button data-sample="loop">loop-phases.mjs</button>
+      <button data-sample="filegrep">file-grep.mjs</button>
+      <button data-sample="gitchanged">git-changed.mjs</button>
+      <button data-sample="channel">channel-pipeline.mjs</button>
+      <button data-sample="modelrouter">model-router.mjs</button>
+      <button data-sample="typed">typed-plan.mjs</button>
+      <button data-sample="askuser">ask-user.mjs</button>
+      <button data-sample="hole">hole-demo.mjs</button>
+      <button data-sample="amend">amend-demo.mjs</button>
+      <button data-sample="models">models-list.mjs</button>
+      <button data-sample="route">route-demo.mjs</button>
+      <button data-sample="escalate">escalate-demo.mjs</button>
     </div>
+    <h3 class="subhead">Saved workflows</h3>
+    <div id="savedList" class="saved-row"><span class="muted">Loading saved workflows…</span></div>
+
     <div class="row">
       <input id="scriptPath" type="text" placeholder="absolute path to .mjs" />
       <button id="loadBtn">Load</button>
+      <button id="saveBtn" title="Save the current editor contents as a saved workflow">💾 Save…</button>
     </div>
     <textarea id="scriptSource" spellcheck="false" placeholder="(loaded script appears here)"></textarea>
+
+    <details class="snippet">
+      <summary>Try a snippet (no LLM, no agent — just args / log / files / git / world.run / channel / future)</summary>
+      <textarea id="snippetCode" spellcheck="false" placeholder="export default async function main() { log('hi'); return 42; }"></textarea>
+      <div class="row">
+        <button id="snippetRunBtn" class="primary">Run snippet</button>
+        <span id="snippetStatus" class="muted">idle</span>
+      </div>
+      <pre id="snippetOut" class="snippet-out" hidden></pre>
+    </details>
+
     <div class="row">
+      <input id="amendFromInput" type="text" placeholder="amend from runId (optional)" style="max-width:240px" />
       <button id="runBtn" class="primary">▶ Run</button>
       <button id="stopBtn" class="danger" disabled>◼ Stop</button>
       <span id="runStatus" class="muted">idle</span>
     </div>
   </section>
 
+  <section class="history card" id="historyCard">
+    <h2>2 · Recent runs <span id="historyCount" class="badge"></span></h2>
+    <p class="muted">
+      Every run (live + persisted) is listed here. Click <strong>Load</strong> to
+      refill the script path; <strong>Amend from</strong> sets the run id so the
+      next <em>Run</em> reuses the prior run's LLM cache.
+    </p>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <span id="historyStatus" class="muted">loading…</span>
+      <button id="historyRefresh" class="muted" style="font-size:12px">Refresh</button>
+    </div>
+    <div id="historyList"></div>
+  </section>
+
   <section class="viewer card" id="viewerCard" hidden>
     <h2>2 · Live progress <span id="runIdBadge" class="badge"></span></h2>
-    <div class="row" id="phaseBar"></div>
-    <div class="row">
-      <div class="col">
-        <h3>Sub-agents</h3>
-        <div id="agentsList" class="list"></div>
+
+    <div id="pendingQuestions" class="pending-questions" hidden>
+      <h3>Pending questions</h3>
+      <p class="muted">The script is waiting on your input. Answer below to let it continue.</p>
+      <div id="pendingQuestionsList"></div>
+    </div>
+
+    <div id="pendingHoles" class="pending-holes" hidden>
+      <h3>Pending holes</h3>
+      <p class="muted">
+        The script is parked on <code>await hole(name, prompt, ctx)</code>. Write a JS
+        function expression that receives <code>ctx</code> as its only parameter and
+        returns the value to unblock the script.
+      </p>
+      <div id="pendingHolesList"></div>
+    </div>
+
+    <div id="pendingEscalates" class="pending-escalates" hidden>
+      <h3>Pending escalates</h3>
+      <p class="muted">
+        The script is parked on <code>await escalate(question, opts)</code>. You can
+        either type a direct answer, or click "Think via LLM" to have the host
+        dispatch an LLM call (with the run's recent log + question as context)
+        and use its response as the answer.
+      </p>
+      <div id="pendingEscalatesList"></div>
+    </div>
+
+    <div class="tab-bar" id="tabBar">
+      <button class="tab active" data-tab="progress">Progress</button>
+      <button class="tab" data-tab="reports">Reports</button>
+      <button class="tab" data-tab="artifacts">Artifacts <span id="artifactCountBadge" class="count-badge" hidden>0</span></button>
+    </div>
+
+    <div class="tab-panel" data-panel="progress">
+      <div class="row" id="phaseBar"></div>
+      <div class="row">
+        <div class="col">
+          <h3>Sub-agents</h3>
+          <div id="agentsList" class="list"></div>
+        </div>
       </div>
-      <div class="col">
-        <h3>Reported items</h3>
-        <div id="reportsList" class="list"></div>
+      <!-- v0.11.0: what actually ran vs what was replayed from an
+           ancestor run's journal. Collapsed by default; it only becomes
+           interesting once you start using `amend from`. -->
+      <details class="journal-trail" id="journalTrail" hidden>
+        <summary>
+          Journal replay trail
+          <span class="badge" id="journalBadge"></span>
+        </summary>
+        <div id="journalMeta" class="journal-meta"></div>
+        <div id="journalList" class="journal-list"></div>
+      </details>
+      <h3>Event log</h3>
+      <pre id="logView"></pre>
+    </div>
+
+    <div class="tab-panel" data-panel="reports" hidden>
+      <h3>Reported items</h3>
+      <div id="reportsList" class="list"></div>
+    </div>
+
+    <div class="tab-panel" data-panel="artifacts" hidden>
+      <p class="muted" id="artifactsEmpty">No artifacts declared yet. Use <code>artifact.chart/table/metrics/board/markdown/file</code> in your script.</p>
+      <div id="artifactsList" class="artifacts-list"></div>
+    </div>
+  </section>
+
+  <!-- Confirm modal: shown before Run starts, lists extracted world.run commands. -->
+  <div class="modal-backdrop" id="confirmModal" hidden>
+    <div class="modal" role="dialog" aria-labelledby="confirmTitle" aria-modal="true">
+      <h3 id="confirmTitle">Approve shell commands</h3>
+      <p class="muted">
+        This script calls <code>world.run(...)</code> with the following command
+        names. Untick any you don't want this run to execute; the rest will be
+        allowed for the duration of this run only.
+      </p>
+      <div id="confirmCmdList" class="confirm-list"></div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px">
+        <button id="confirmCancel" class="danger">Cancel</button>
+        <button id="confirmOk" class="primary">Approve &amp; run</button>
       </div>
     </div>
-    <h3>Event log</h3>
-    <pre id="logView"></pre>
-  </section>
+  </div>
+
+  <!-- Save modal: collect name / description / whenToUse for a saved workflow. -->
+  <div class="modal-backdrop" id="saveModal" hidden>
+    <div class="modal" role="dialog" aria-labelledby="saveTitle" aria-modal="true">
+      <h3 id="saveTitle">Save workflow</h3>
+      <p class="muted">
+        Save the editor's current contents as a named workflow. Frontmatter is
+        written automatically; only the script body needs to be in the editor.
+      </p>
+      <div class="row" style="flex-direction:column;align-items:stretch">
+        <label for="saveName" class="muted">Name (letters, digits, dash, dot, underscore — 1–64 chars)</label>
+        <input id="saveName" type="text" placeholder="my-workflow" />
+      </div>
+      <div class="row" style="flex-direction:column;align-items:stretch">
+        <label for="saveDescription" class="muted">Description (one line)</label>
+        <input id="saveDescription" type="text" placeholder="What this workflow does" />
+      </div>
+      <div class="row" style="flex-direction:column;align-items:stretch">
+        <label for="saveWhenToUse" class="muted">When to use</label>
+        <input id="saveWhenToUse" type="text" placeholder="When to reach for this workflow" />
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px">
+        <button id="saveCancel" class="danger">Cancel</button>
+        <button id="saveOk" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="./editor.js"></script>
 </body>

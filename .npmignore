@@ -1,0 +1,17 @@
+# npm falls back to .gitignore when this file is absent, and .gitignore
+# excludes exactly the two things the published package MUST carry:
+#
+#   packages/dynamic-workflow/dist/          the built engine
+#   packages/dynamic-workflow-runtime/dist/  the built harness
+#   packages/dynamic-workflow/src/compiler/libs.generated.ts
+#
+# The vendored sources are committed, but the built output is a build
+# artifact (gitignored) that `npm run build` produces. A tarball without it
+# installs a plugin that cannot import its own engine.
+#
+# This file exists so npm uses it INSTEAD of .gitignore. Everything shipped is
+# whitelisted by package.json's "files" field; nothing is excluded here.
+#
+# The build itself is reproduced on install from a git checkout (npm runs
+# "prepare" there). A tarball installed from the registry carries the built
+# output directly.

@@ -10,6 +10,53 @@ permissions:
   contents: read
 
 jobs:
+  build:
+    name: build vendored engine + verify vendor integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      # The vendored ZCode engine is built with the repo's own typescript, so a
+      # build failure here means the plugin would ship a broken dist.
+      - name: Build vendored @zcode/dynamic-workflow
+        run: npm run build
+
+      # Guards against someone editing the vendored upstream source by hand.
+      # The manifest is the contract: packages/dynamic-workflow must stay
+      # byte-identical to zai-org/ZCode.
+      - name: Verify vendored tree matches its manifest
+        run: npm run verify:vendor
+
+      - name: Smoke: the engine must load and expose its public API
+        run: |
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs';
+            const m = await import('./packages/dynamic-workflow/dist/index.js');
+            const required = [
+              'compileWorkflowScript', 'createWorkflowProgram', 'analyzeWorkflowScript',
+              'lowerWorkflow', 'synthesizeAskSchemas', 'buildAskSpecs',
+              'WorkflowEngine', 'FACADE_DTS', 'FACADE_FILE_NAME',
+            ];
+            const missing = required.filter((k) => !(k in m));
+            if (missing.length) { console.error('missing exports:', missing); process.exit(1); }
+            console.log('engine exports ok:', required.length);
+          "
+
+      # The real end-to-end proof: a workflow script is compiled, analysed,
+      # lowered, executed in the harness child process, and settled — with a
+      # stub model and a stub world, so CI needs no network and no LLM.
+      - name: Smoke: a Dynamic Workflow runs end to end
+        run: node scripts/dwf-smoke.mjs
+
   syntax-check:
     name: node --check (lib + public + samples)
     runs-on: ubuntu-latest
@@ -21,9 +68,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # The plugin has zero npm dependencies. The actions/setup-node
-          # step is here so the workflow stays in a known Node runtime,
-          # but `npm install` is intentionally not run.
+          # The plugin ships prebuilt ESM for the vendored engine; there is
+          # nothing to install for the plugin's own sources, and the vendored
+          # tree is covered by the `build` job above.
 
       - name: Syntax check every .js and .mjs file
         run: |
@@ -31,8 +78,7 @@ jobs:
           shopt -s globstar nullglob
           ok=0
           fail=0
-          for f in **/*.js **/*.mjs; do
-            # skip anything inside node_modules even though it shouldn't exist
+          for f in lib/**/*.js lib/**/*.mjs public/**/*.js public/**/*.mjs samples/**/*.js samples/**/*.mjs scripts/**/*.mjs; do
             case "$f" in node_modules/*) continue;; esac
             if node --check "$f" 2>/tmp/err; then
               ok=$((ok + 1))

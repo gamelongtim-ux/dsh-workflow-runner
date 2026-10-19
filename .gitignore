@@ -6,3 +6,14 @@ node_modules/
 # dev helpers (not part of the published plugin)
 dev-smoke.mjs
 dev-probe-gcm.ps1
+
+# feasibility spike: vendored ZCode engine + its own node_modules/build output.
+# Source of truth is the ZCode repo; this directory is reproducible, not authored.
+# See docs/dynamic-workflow-port.md §8.
+.spike/
+
+# vendored ZCode engine build output + the generated TS stdlib closure.
+# Both are produced by `npm run build`; the vendored *source* is committed.
+packages/dynamic-workflow/dist/
+packages/dynamic-workflow/src/compiler/libs.generated.ts
+packages/dynamic-workflow-runtime/dist/

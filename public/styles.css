@@ -114,6 +114,11 @@ textarea:focus { outline: none; border-color: var(--accent); }
 .phase.active { color: var(--text); background: var(--accent); border-color: transparent; }
 .phase.error { background: rgba(255,118,118,0.12); border-color: var(--danger); color: var(--danger); }
 .phase.done { color: var(--ok); border-color: var(--ok); }
+/* v0.12.0: reserved for a phase the script never reached. The facade
+   has no way to declare phases in advance, so the runtime cannot emit
+   this yet — it is here so a future "declared phases" feature drops in
+   without touching the renderer. */
+.phase.pending { color: var(--muted); border-color: var(--line); border-style: dashed; }
 
 .list .item {
   background: var(--panel-2);
@@ -152,6 +157,33 @@ pre#logView {
 .log-warn { color: var(--warn); }
 .log-info { color: var(--text); }
 .log-debug { color: var(--muted); }
+/* v0.8.0: TypeScript typecheck diagnostics rendered into the log
+   pane when /api/run returns a structured 400 error. The header is
+   a thicker rule than the per-row lines so the user can scan the
+   list at a glance. */
+.typecheck-header {
+  border-top: 1px solid var(--danger);
+  border-bottom: 1px solid var(--danger);
+  padding: 4px 0;
+  font-weight: 600;
+  margin: 4px 0;
+}
+.typecheck-row {
+  padding: 2px 0 2px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.typecheck-row strong { color: var(--text); margin-right: 8px; }
+.typecheck-row .typecheck-code {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: rgba(255,118,118,0.18);
+  color: var(--danger);
+  font-weight: 600;
+  margin-right: 8px;
+  font-size: 11px;
+}
 
 .status-running { color: var(--accent); }
 .status-completed { color: var(--ok); }
@@ -159,3 +191,443 @@ pre#logView {
 .status-stopped { color: var(--warn); }
 
 a { color: var(--accent); text-decoration: none; }
+
+/* ---- tab bar (Progress / Reports / Artifacts) ---- */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+}
+.tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 6px 14px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  position: relative;
+  bottom: -1px;
+}
+.tab:hover { color: var(--text); border-color: var(--line); }
+.tab.active {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--line);
+  border-bottom-color: var(--panel-2);
+  font-weight: 600;
+}
+.tab .count-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  min-width: 18px;
+  text-align: center;
+  background: var(--accent);
+  color: #08101f;
+  border-radius: 999px;
+  font: 11px ui-monospace, monospace;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.tab-panel { padding-top: 4px; }
+
+/* ---- phase folding: ×N badge ---- */
+.phase .count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 999px;
+  font: 11px ui-monospace, monospace;
+  color: inherit;
+  opacity: 0.9;
+}
+.phase.active .count { background: rgba(0,0,0,0.35); }
+
+/* ---- confirm modal ---- */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  width: min(540px, 92vw);
+  box-shadow: var(--shadow);
+}
+.modal h3 { margin: 0 0 8px; font-size: 16px; }
+.modal p { margin: 6px 0 10px; }
+.confirm-list {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  max-height: 280px;
+  overflow: auto;
+}
+.confirm-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0;
+  font: 13px ui-monospace, "Fira Code", Menlo, monospace;
+}
+.confirm-row input[type=checkbox] { transform: scale(1.15); accent-color: var(--accent); }
+.confirm-row code { color: var(--accent-2); }
+
+/* ---- artifacts panel ---- */
+.artifacts-list { display: flex; flex-direction: column; gap: 14px; }
+.artifact-card {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.artifact-card.primary {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.artifact-head {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 8px;
+}
+.artifact-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.artifact-kind {
+  font: 11px ui-monospace, monospace;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.artifact-meta { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+/* chart */
+.chart-svg { width: 100%; height: 220px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.chart-axis { stroke: var(--line); stroke-width: 1; }
+.chart-grid { stroke: var(--line); stroke-width: 0.5; stroke-dasharray: 2 3; opacity: 0.5; }
+.chart-line { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+.chart-dot { fill: var(--accent); }
+.chart-bar { fill: var(--accent); opacity: 0.85; }
+.chart-baseline { stroke: var(--warn); stroke-dasharray: 4 3; }
+.chart-label { font: 11px ui-monospace, monospace; fill: var(--muted); }
+
+/* table */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th, .tbl td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+.tbl th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.3px; }
+.tbl tr.is-key td { background: rgba(110,168,255,0.06); }
+.tbl tr.is-new td { animation: flash 0.7s ease-out; }
+@keyframes flash { from { background: rgba(110,168,255,0.25); } to { background: transparent; } }
+
+/* metrics tiles */
+.metrics-tiles { display: flex; gap: 10px; flex-wrap: wrap; }
+.metric-tile {
+  flex: 1 1 0; min-width: 120px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.metric-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+.metric-value { font: 22px/1.2 ui-monospace, "Fira Code", Menlo, monospace; color: var(--text); margin-top: 4px; }
+.metric-unit { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+/* kanban */
+.kanban { display: flex; gap: 10px; overflow-x: auto; }
+.kanban-col {
+  flex: 1 1 0; min-width: 180px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+.kanban-col-name { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; padding: 0 4px; }
+.kanban-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.kanban-card .kc-key { color: var(--accent); font-weight: 600; }
+.kanban-card .kc-detail { color: var(--muted); font-size: 12px; }
+
+/* markdown */
+.markdown-body { font-size: 14px; line-height: 1.55; color: var(--text); }
+.markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 14px 0 6px; line-height: 1.25; }
+.markdown-body h1 { font-size: 20px; }
+.markdown-body h2 { font-size: 16px; }
+.markdown-body h3 { font-size: 14px; }
+.markdown-body p { margin: 6px 0; }
+.markdown-body ul, .markdown-body ol { margin: 6px 0 6px 22px; }
+.markdown-body code { background: var(--bg); border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px; font: 12px ui-monospace, monospace; }
+.markdown-body pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; overflow: auto; }
+.markdown-body a { color: var(--accent); text-decoration: underline; }
+.markdown-body blockquote { border-left: 3px solid var(--accent); margin: 6px 0; padding: 2px 10px; color: var(--muted); }
+
+/* artifact file (link card) */
+.file-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 13px ui-monospace, monospace;
+  color: var(--accent);
+}
+.file-link:hover { border-color: var(--accent); }
+
+/* ---- v0.4.0: saved workflows + snippet + pending questions ---- */
+.saved-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; }
+.saved-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  font: 12px ui-monospace, "Fira Code", Menlo, monospace;
+  color: var(--text);
+  min-width: 120px; max-width: 240px;
+}
+.saved-btn:hover { border-color: var(--accent); }
+.saved-btn > div:first-child { font-weight: 600; color: var(--accent); }
+.subhead {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+details.snippet {
+  margin: 12px 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+}
+details.snippet > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  list-style: none;
+}
+details.snippet > summary:hover { color: var(--text); }
+details.snippet[open] > summary { color: var(--text); }
+details.snippet > textarea {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 8px;
+  height: 140px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: 12.5px ui-monospace, "Fira Code", Menlo, monospace;
+  color: var(--text);
+  resize: vertical;
+}
+.snippet-out {
+  display: block;
+  margin: 4px 12px 12px;
+  max-height: 280px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: 12px ui-monospace, "Fira Code", Menlo, monospace;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.pending-questions {
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0 12px;
+}
+.pending-questions h3 { margin: 0 0 4px; color: var(--accent); }
+.question-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.question-card.resolved { opacity: 0.6; }
+.question-text { font-size: 14px; color: var(--text); }
+.question-input { display: flex; gap: 6px; flex-wrap: wrap; }
+.question-input > input[type=text] {
+  flex: 1 1 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: 13px ui-monospace, monospace;
+  color: var(--text);
+}
+.question-input > input[type=text]:focus { outline: none; border-color: var(--accent); }
+
+/* v0.5.0: pending holes */
+.pending-holes {
+  background: var(--panel-2);
+  border: 1px solid var(--accent-2);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0 12px;
+}
+.pending-holes h3 { margin: 0 0 4px; color: var(--accent-2); }
+.hole-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.hole-card.resolved { opacity: 0.6; }
+.hole-head { font-weight: 600; color: var(--text); }
+.hole-prompt { font-size: 13px; }
+.hole-hint { font-size: 12px; }
+.hole-body-input {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: 12.5px ui-monospace, "Fira Code", Menlo, monospace;
+  color: var(--text);
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* v0.6.0: pending escalates */
+.pending-escalates {
+  background: var(--panel-2);
+  border: 1px solid var(--ok);
+  border-left: 3px solid var(--ok);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0 12px;
+}
+.pending-escalates h3 { margin: 0 0 4px; color: var(--ok); }
+
+/* v0.7.0: recent runs table */
+.history { margin-top: 18px; }
+.history .run-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 110px 130px 60px 60px 80px;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+.history .run-row .badge-mini {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-align: center;
+}
+.history .run-row .badge-mini.completed { background: rgba(111,226,154,0.18); color: var(--ok); }
+.history .run-row .badge-mini.error { background: rgba(255,118,118,0.18); color: var(--danger); }
+.history .run-row .badge-mini.stopped { background: rgba(246,193,119,0.18); color: var(--warn); }
+.history .run-row .badge-mini.running,
+.history .run-row .badge-mini.starting { background: rgba(110,168,255,0.18); color: var(--accent); }
+.history .run-row .src { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history .run-row .src .amend-tag { color: var(--accent-2); font-size: 10.5px; margin-left: 4px; }
+.history .run-row .rid { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; }
+.history .run-row .src-from-disk { color: var(--ok); }
+.history .run-row button { padding: 2px 8px; font-size: 11px; }
+.escalate-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.escalate-card.resolved { opacity: 0.6; }
+.escalate-card.thinking { border-color: var(--warn); }
+.escalate-q { font-weight: 600; color: var(--text); }
+.escalate-opts { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ----- v0.11.0: journal replay trail -------------------------------------
+
+   Answers "how much of this run actually ran?". An amended run mixes
+   live work with work replayed from an ancestor's journal; live is red,
+   replay is grey. The two must never look alike — conflating them is
+   how you end up believing a run was cheaper than it was.            */
+
+.journal-trail {
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: rgba(127, 127, 127, 0.04);
+}
+.journal-trail > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+.journal-trail > summary .badge {
+  font-weight: 400;
+  font-size: 11px;
+}
+.journal-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 6px 0 4px;
+}
+.journal-list {
+  max-height: 260px;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+.journal-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.08);
+}
+.journal-time { color: var(--muted); flex: 0 0 auto; }
+.journal-what { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.journal-meta-inline { color: var(--muted); flex: 0 0 auto; }
+.journal-row.live .journal-what { color: var(--warn); }
+.journal-row.replayed .journal-what { color: var(--muted); }
+.journal-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  font-family: inherit;
+}
+.journal-badge.live { background: rgba(255, 176, 32, 0.16); color: var(--warn); }
+.journal-badge.replayed { background: rgba(127, 127, 127, 0.16); color: var(--muted); }

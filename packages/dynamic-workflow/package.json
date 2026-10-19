@@ -1,0 +1,26 @@
+{
+  "name": "@dsh-workflow/dynamic-workflow",
+  "version": "0.13.0",
+  "private": true,
+  "type": "module",
+  "description": "Vendored copy of ZCode's @zcode/dynamic-workflow engine. Source is upstream, unmodified — see vendor-manifest.json and scripts/vendor-dynamic-workflow.mjs.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./projections": {
+      "types": "./dist/projections.d.ts",
+      "import": "./dist/projections.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/generate-libs.mjs && tsc",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "typescript": "^5.9.3"
+  }
+}

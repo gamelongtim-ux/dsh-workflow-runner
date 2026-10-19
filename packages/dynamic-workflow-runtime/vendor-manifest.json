@@ -1,0 +1,42 @@
+{
+  "_comment": "Hashes of the vendored ZCode tree. Regenerate with scripts/vendor-dynamic-workflow.mjs --from <zcode-checkout>. Verify with --verify. Do not hand-edit. `upstreamFiles` must stay byte-identical to zai-org/ZCode (except the recorded import-specifier rewrite); `localFiles` are ours but tracked so edits are visible.",
+  "upstream": "https://github.com/zai-org/ZCode",
+  "package": "apps/zcode-cli/packages/dynamic-workflow-runtime",
+  "importRewrite": {
+    "from": "\"@zcode/dynamic-workflow\"",
+    "to": "\"../../dynamic-workflow/dist/index.js\"",
+    "files": "see sync output"
+  },
+  "fileCount": 27,
+  "upstreamFiles": {
+    "README.md": "6df64e8b924f738ca6db110894afa5f3fa2fc3a17da1e4a75bdd98fdf065222f",
+    "dist/child-cell-streams.d.ts": "30e377ca4aac89ffc3f1f764419feaf3b283a1b1340a552762a91b2a538d8818",
+    "dist/child-cell-streams.d.ts.map": "86d3d879afbdc83ecac0a2bd7984cd4c01483826961ed5d2ce6afd684515baf3",
+    "dist/child-cell-streams.js": "58fb56f859887bda7dd32bfb46ac969adb919ab8252fd3641f5e7378086a509d",
+    "dist/child-entry-file.d.ts": "73f5bc23563801dffb01438d218694ade8d10f4f31719d26049ed1933058c540",
+    "dist/child-entry-file.d.ts.map": "f745abfd4d6b33634f40862512a009d484265445afd762b1b2c29fdbdcdfbd65",
+    "dist/child-entry-file.js": "e30c0ac44766d408f89c172c6df5d4c18a3882e443b65f6429f93695fe228460",
+    "dist/child-source.d.ts": "2e0f04ebd10ff0ee503ad6e43e4a35c6fe412d0e632a096cf73a4143cd7b30ce",
+    "dist/child-source.d.ts.map": "1990c94e941261ace08d1ce9c62b3bf5255e2d57fe72d51b7363616d879b649c",
+    "dist/child-source.js": "683b29f7c7c093847c23695f8c2228d9921a6914844a8608259d94fb815aa004",
+    "dist/harness.d.ts": "c2f3cc73ed64dbf7f4e85e2ee08124748414480255ac2bfd29f6c67ea8264c36",
+    "dist/harness.d.ts.map": "a95cd393c4ac1fb783aa99c722d7e34510229365c8fc5ccd9459548ed6ec8994",
+    "dist/harness.js": "654330eb4e5bafeab4b99fea1be32db0ad663cdd31518cfae4d2e7220647fc2b",
+    "dist/index.d.ts": "c438d4d97d8e2854852bb2b677f94577da13882edb1d5f14e51420feb3264ec3",
+    "dist/index.d.ts.map": "86e0b6b33d419c538a06cc109ad995c3d6bd4ec3f7cf6476da622004e41a3fd9",
+    "dist/index.js": "9237d56fe3707351e3113ed135a9d446e4332ebc70d26214b0b57c11a592477f",
+    "dist/protocol.d.ts": "8085ea7e23b6b711fc73ff7f3f8b5683c3d40d2e55f8b03f7c4423e189720b7a",
+    "dist/protocol.d.ts.map": "7eca327b70356b11c99c74eb81ee38cdbf23738526a08ee1a0ed757abda800a9",
+    "dist/protocol.js": "de7c1fb77a30bf1ecdaa9c15fbf8c7d2855f1567788b99cf4b685dc411c51577",
+    "src/child-cell-streams.ts": "9c2b2b1c3bb5f93e1737090db755fee0e081ee438059916444a82551e3842813",
+    "src/child-entry-file.ts": "ac16d7928593bb4638e3ae4b40d3a07c44a4ed45df43cabe0f7e81be69f41eba",
+    "src/child-source.ts": "70e616b9554c3dd744c8f7c7fcc56e5f95a74504d2c7450a8fa10b867b6f74f6",
+    "src/harness.ts": "39f8ffaa74d611313848cf57f4c9a6af70392d70c1ecf975eb784542e2e00fed",
+    "src/index.ts": "0c4de3dede93d14f2df2882de202da65bb6111245195295e04ef20b390b7d37b",
+    "src/protocol.ts": "1aa82616558927f42265dd7007119684062ac2f2a503a3c6dc1e25b2919ecb87",
+    "tsconfig.json": "2637d8f8155999464c9b1251b23c3fdbcc70a25538b8bd582a9e2b355bae41fd"
+  },
+  "localFiles": {
+    "package.json": "f72d29a36707e7fc93122271c025b5543cebfbc5ae66f1f9b31c65e4c60b5a80"
+  }
+}

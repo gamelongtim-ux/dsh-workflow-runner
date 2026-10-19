@@ -1,0 +1,19 @@
+{
+  "name": "@dsh-workflow/dynamic-workflow-runtime",
+  "version": "0.13.0",
+  "private": true,
+  "type": "module",
+  "description": "Vendored copy of ZCode's @zcode/dynamic-workflow-runtime harness: runs a lowered workflow in a sandboxed child process and bridges its __host calls to the engine over NDJSON. Source is upstream, unmodified except the engine import specifier — see vendor-manifest.json.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  }
+}

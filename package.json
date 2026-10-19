@@ -1,7 +1,7 @@
 {
   "name": "dsh-workflow-runner",
-  "version": "0.1.6",
-  "description": "Bring ZCode-style dynamic-workflows semantics into dsh: write JS workflow scripts that spawn parallel LLM agents and shell gates; live progress streams to the chat UI as overlay cards.",
+  "version": "0.13.0",
+  "description": "Run ZCode-style Dynamic Workflows inside dsh (DeepSeek Harness). Workflows are TypeScript scripts analysed at compile time (site / causality / control-flow / hand-off graphs) and lowered to instrumented JS with stable site ids, so every agent.ask carries a typed result contract synthesized from ask<T> generics. The engine is ZCode's own @zcode/dynamic-workflow, vendored unmodified. On top of it: parallel LLM agents with real chat history, shell gates, artifact deliverables (file / markdown / chart / table / metrics / board), workspace file and git reads, in-process channel/future concurrency with a per-run ceiling, model routing, mid-run human questions, mid-run code injection (hole<T>), structural amend that injects a stage into a live run, escalate() with Think-via-LLM, saved workflows, snippet evaluation, on-disk run history, a per-run max_concurrency ceiling, explicit phase lifecycle events, channel-deadlock detection, and an OS-level sandbox whose path fences are enforced at the single world-read choke point. Live progress streams to the chat UI as overlay cards.",
   "license": "MIT",
   "keywords": [
     "deepseek",
@@ -11,7 +11,8 @@
     "agents",
     "cordis",
     "orchestration",
-    "llm"
+    "llm",
+    "schemastery"
   ],
   "engines": {
     "dsh": ">=0.2.0-rc.2"
@@ -30,12 +31,19 @@
     "lib",
     "public",
     "samples",
+    "packages",
     "cordis.patch.yml",
     "CHANGELOG.md",
     "README.md",
     "README.zh-CN.md",
     "LICENSE"
   ],
+  "scripts": {
+    "build": "node packages/dynamic-workflow/scripts/generate-libs.mjs && tsc -p packages/dynamic-workflow/tsconfig.runtime.json && tsc -p packages/dynamic-workflow-runtime/tsconfig.json",
+    "build:full": "node packages/dynamic-workflow/scripts/generate-libs.mjs && tsc -p packages/dynamic-workflow/tsconfig.json",
+    "verify:vendor": "node scripts/vendor-dynamic-workflow.mjs --verify",
+    "prepare": "npm run build"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -60,6 +68,20 @@
         "0.2.0-rc.2": "compatible"
       }
     }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "vitest": "^4.1.12"
   }
 }
-

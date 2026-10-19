@@ -1,0 +1,5 @@
+{
+  "//": "Runtime build of the vendored engine. Extends the upstream tsconfig verbatim and only drops src/testing, which is ZCode's JournalStorePort contract suite: it imports vitest and is meant to be run against OUR journal implementation, not shipped in the plugin dist. The upstream tsconfig.json is kept unmodified so the vendor manifest stays byte-identical to zai-org/ZCode.",
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "src/testing"]
+}
