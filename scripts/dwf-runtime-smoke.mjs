@@ -54,6 +54,18 @@ function check(label, ok, detail) {
   process.stdout.write(`  [${mark}] ${label}${detail === undefined ? '' : ` — ${detail}`}\n`);
 }
 
+/** Wait for a background run to settle. */
+async function settle(runtime, runId) {
+  for (let i = 0; i < 200; i += 1) {
+    const state = runtime.runs.get(runId);
+    if (state && (state.status === 'completed' || state.status === 'error' || state.status === 'stopped')) {
+      return state;
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return runtime.runs.get(runId);
+}
+
 /** A stub model that answers the two asks above and nothing else. */
 function stubChat({ messages }) {
   const user = messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n');
@@ -90,13 +102,28 @@ async function main() {
 
   // ——— 1. a workflow that completes ———
   process.stdout.write('\n1. a workflow on the engine path\n');
-  const { runId, status, settlement } = await runtime.startEngine({
+  const started = await runtime.startEngine({
     scriptText: WORKING,
     workspaceRoot: workspace,
     name: 'working.dwf.ts',
   });
-  check('run reaches the engine path', Boolean(runtime.runs.get(runId)?._engine), `run ${runId}`);
-  check('the run completes', status === 'completed', `status=${status} ${settlement?.error ? JSON.stringify(settlement.error) : ''}`);
+  check('startEngine returns without waiting for the run', started.status === 'starting',
+    `status=${started.status}`);
+  check('startEngine reports no diagnostics for a sound script',
+    (started.diagnostics || []).length === 0,
+    JSON.stringify(started.diagnostics));
+
+  // The run happens in the background, so wait for it to settle.
+  const { runId } = started;
+  let state = null;
+  for (let i = 0; i < 200; i += 1) {
+    state = runtime.runs.get(runId);
+    if (state && (state.status === 'completed' || state.status === 'error' || state.status === 'stopped')) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const settlement = state?._engine?.settlement;
+  check('the run completes', state?.status === 'completed',
+    `status=${state?.status} ${settlement?.error ? JSON.stringify(settlement.error) : ''}`);
   check('the artifact is the script\'s return value',
     settlement?.artifact?.plan?.title === 'Seed the clock',
     JSON.stringify(settlement?.artifact));
@@ -118,31 +145,46 @@ async function main() {
       && Boolean(graphs?.controlFlow) && Boolean(graphs?.handoff),
     JSON.stringify(graphs?.sizes));
 
-  // ——— 2. the sandbox refuses an escape ———
-  process.stdout.write('\n2. the sandbox\n');
+  // ——— 2. a script that does not compile is a report, not a run ———
+  process.stdout.write('\n2. a script that does not compile\n');
+  const broken = await runtime.startEngine({
+    scriptText: 'const x: number = "not a number";\nreturn x;',
+    workspaceRoot: workspace,
+    name: 'broken.dwf.ts',
+  });
+  check('a broken script is reported, not run', broken.status === 'error', `status=${broken.status}`);
+  check('the diagnostics come back with it', (broken.diagnostics || []).length > 0,
+    JSON.stringify((broken.diagnostics || []).map((d) => d.code)));
+
+  // ——— 3. the sandbox refuses an escape ———
+  process.stdout.write('\n3. the sandbox\n');
   const escape = await runtime.startEngine({
     scriptText: ESCAPE,
     workspaceRoot: workspace,
     name: 'escape.dwf.ts',
   });
+  const escapeSettlement = await settle(runtime, escape.runId);
   check('a path outside the workspace is refused',
-    escape.status === 'error' || escape.status === 'stopped',
-    `status=${escape.status}`);
-  const escapeError = escape.settlement?.error?.message || String(escape.settlement?.error || '');
+    escapeSettlement?.status === 'error' || escapeSettlement?.status === 'stopped',
+    `status=${escapeSettlement?.status}`);
+  const escapeError = escapeSettlement?._engine?.settlement?.error?.message
+    || String(escapeSettlement?._engine?.settlement?.error || '');
   check('the refusal names the workspace', /outside workspaceRoot|escapes workspaceRoot/.test(escapeError),
     escapeError.slice(0, 140));
 
-  // ——— 3. the sandbox refuses a symlink out ———
-  process.stdout.write('\n3. a symlink pointing out of the workspace\n');
+  // ——— 4. the sandbox refuses a symlink out ———
+  process.stdout.write('\n4. a symlink pointing out of the workspace\n');
   const link = await runtime.startEngine({
     scriptText: SYMLINK,
     workspaceRoot: workspace,
     name: 'symlink.dwf.ts',
   });
+  const linkSettlement = await settle(runtime, link.runId);
   check('the symlinked file is refused',
-    link.status === 'error' || link.status === 'stopped',
-    `status=${link.status}`);
-  const linkError = link.settlement?.error?.message || String(link.settlement?.error || '');
+    linkSettlement?.status === 'error' || linkSettlement?.status === 'stopped',
+    `status=${linkSettlement?.status}`);
+  const linkError = linkSettlement?._engine?.settlement?.error?.message
+    || String(linkSettlement?._engine?.settlement?.error || '');
   check('the refusal names the symbolic link', /symbolic link|outside workspaceRoot/.test(linkError),
     linkError.slice(0, 140));
 

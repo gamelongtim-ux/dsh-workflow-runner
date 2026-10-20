@@ -68,6 +68,11 @@ jobs:
       - name: Smoke: the legacy child-process path
         run: node scripts/legacy-smoke.mjs
 
+      # The compile report the engine endpoints serve: diagnostics, the four
+      # graphs, the ask sites and the lowered body.
+      - name: Check: the compile report
+        run: node scripts/dwf-compile-check.mjs
+
   syntax-check:
     name: node --check (lib + public + samples)
     runs-on: ubuntu-latest

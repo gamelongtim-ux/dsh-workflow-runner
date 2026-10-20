@@ -35,6 +35,7 @@
 | **C. 接入 dsh 现有 runtime** | ✅ 完成 | `lib/runtime.js` 的 `startEngine()`；run state 抽成 `#newState`（两条路径共用）；phase/report 抽成 `#enterPhase`/`#recordReport`；`stop()` 支持 abort 引擎 run；`ctx.llm` 的模型调用做成可注入 |
 | **C 的验收** | ✅ PASS | `scripts/dwf-runtime-smoke.mjs`：run 完成、产物正确、phase/agent/report/journal 落在同一 state 形状上、四张图非空、**路径逃逸与 symlink 逃逸双双被拒且给出原因** |
 | **C 顺带修掉的三个缺陷** | ✅ | ① 相对路径按 `process.cwd()` 解析（应按工作区根）② 围栏纯词法判断，symlink 可逃逸 ③ `#runGit` 把**未洗白的 host env** 给了 git 子进程（API key 泄漏） |
+| **C+. 接进 dsh 的 HTTP API** | ✅ 完成 | `POST /api/engine/compile`（只编译，出诊断 + 四张图 + 站点表 + 降级体）与 `POST /api/engine/run`（跑）；`/api/state` 带上 `engine` 段（诊断 + 图 + 结算） |
 | **旧路径回归** | ✅ PASS | `scripts/legacy-smoke.mjs`：子进程路径照常工作 |
 | **D. dsh 独有 facade 能力** | ⬜ 未开始 | `askUser` / `escalate` / `stages` / `route` / `t` / `concurrency` / `models` / `constants` 的 facade 声明与运行时 |
 | **E. 模型面工具 + 内置 skill** | ⬜ 未开始 | `CreateWorkflow` 等 tool + 改写后的 `dynamic-workflows` skill |
