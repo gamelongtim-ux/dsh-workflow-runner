@@ -631,3 +631,42 @@ details.snippet > textarea {
 }
 .journal-badge.live { background: rgba(255, 176, 32, 0.16); color: var(--warn); }
 .journal-badge.replayed { background: rgba(127, 127, 127, 0.16); color: var(--muted); }
+
+/* ——— v0.14.0: the four analysis graphs ——— */
+
+.graphs { margin-top: 8px; }
+.graph-legend { margin: 0 0 10px; font-size: 12px; }
+.graph-tabs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+.graph-tab {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.graph-tab:hover { color: var(--text); }
+.graph-tab.active { color: var(--text); background: var(--panel-2); }
+.graph-panel { overflow-x: auto; }
+.graph-svg { display: block; min-width: 320px; }
+.graph-node-label { fill: var(--text); font-size: 12px; }
+.graph-node-kind { fill: var(--muted); font-size: 10px; }
+.graph-edge-label { fill: var(--muted); font-size: 10px; }
+.graph-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.graph-table th,
+.graph-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.graph-table th { color: var(--muted); font-weight: 500; }
+.graph-table td:first-child { white-space: nowrap; }
+.graph-participants { display: flex; flex-direction: column; gap: 6px; }
+.graph-participant {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 6px 9px;
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+.graph-participant-name { color: var(--accent); font-weight: 600; min-width: 150px; }
+.graph-participant-steps { color: var(--muted); font-size: 12px; }

@@ -40,6 +40,21 @@
       <button data-sample="route">route-demo.mjs</button>
       <button data-sample="escalate">escalate-demo.mjs</button>
     </div>
+
+    <h3 class="subhead">Dynamic Workflows <span class="muted">— TypeScript, compiled before it runs</span></h3>
+    <p class="muted">
+      These run on the engine path: the script is compiled first, so a
+      workflow that does not compile is reported instead of run, and the
+      analysis graphs appear in the <strong>Graphs</strong> tab.
+    </p>
+    <div class="samples-row">
+      <button data-sample="dwfsmoke">smoke.dwf.ts</button>
+      <button data-sample="dwfscan">typed-scan.dwf.ts</button>
+      <button data-sample="dwfplanner">planner-critic.dwf.ts</button>
+      <button data-sample="dwfpipeline">pipeline.dwf.ts</button>
+      <button data-sample="dwfhuman">ask-human.dwf.ts</button>
+      <button data-sample="dwfroute">route-models.dwf.ts</button>
+    </div>
     <h3 class="subhead">Saved workflows</h3>
     <div id="savedList" class="saved-row"><span class="muted">Loading saved workflows…</span></div>
 
@@ -116,6 +131,7 @@
       <button class="tab active" data-tab="progress">Progress</button>
       <button class="tab" data-tab="reports">Reports</button>
       <button class="tab" data-tab="artifacts">Artifacts <span id="artifactCountBadge" class="count-badge" hidden>0</span></button>
+      <button class="tab" data-tab="graphs">Graphs</button>
     </div>
 
     <div class="tab-panel" data-panel="progress">
@@ -149,6 +165,19 @@
     <div class="tab-panel" data-panel="artifacts" hidden>
       <p class="muted" id="artifactsEmpty">No artifacts declared yet. Use <code>artifact.chart/table/metrics/board/markdown/file</code> in your script.</p>
       <div id="artifactsList" class="artifacts-list"></div>
+    </div>
+
+    <!-- v0.14.0: the four analysis graphs. A run on the engine path is
+         compiled before it runs, so its shape is known before the first
+         token comes back. -->
+    <div class="tab-panel" data-panel="graphs" hidden>
+      <h3>Analysis</h3>
+      <p class="muted">
+        The four views the compiler produced: what the script does, what
+        happens before what, where execution can go next, and who takes part
+        in each phase.
+      </p>
+      <div id="graphsList" class="graphs"></div>
     </div>
   </section>
 

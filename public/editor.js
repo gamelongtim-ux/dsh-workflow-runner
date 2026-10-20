@@ -3,6 +3,13 @@
 // Pure-vanilla ES module; no build step. Wires the editor form to /api/* and
 // renders live SSE events into the viewer card.
 //
+// v0.14.0 additions:
+//   - A fourth tab, Graphs: the four analysis views the engine's compile step
+//     produced (site, causality, control flow, hand-off), drawn by
+//     public/graph-view.js.
+//   - A `.dwf.ts` script runs on the ENGINE path (compiled first, graphs
+//     included); everything else keeps the child-process path.
+//
 // v0.2.0 additions:
 //   - Confirm modal: extracts world.run commands before run start, asks user
 //     to approve a subset, sends the approved list as worldRunAllowlist.
@@ -10,6 +17,8 @@
 //   - Artifact renderers: chart (SVG), table, metrics tiles, board (kanban),
 //     markdown (minimal subset), file (link to /api/artifact-content).
 //   - Phase folding: same-name phase in a loop shows as one pill with ×N.
+
+import { renderGraphs } from './graph-view.js';
 
 const SAMPLES = {
   smoke:       'samples/smoke.mjs',
@@ -29,6 +38,18 @@ const SAMPLES = {
   models:      'samples/models-list.mjs',
   route:       'samples/route-demo.mjs',
   escalate:    'samples/escalate-demo.mjs',
+};
+
+// v0.14.0: the Dynamic Workflow samples — the engine path's authoring
+// surface. A `.dwf.ts` script is TypeScript, compiled before it runs, with
+// typed asks and the four analysis graphs.
+const DWF_SAMPLES = {
+  dwfsmoke:     'samples/dwf/smoke.dwf.ts',
+  dwfscan:      'samples/dwf/typed-scan.dwf.ts',
+  dwfplanner:   'samples/dwf/planner-critic.dwf.ts',
+  dwfpipeline:  'samples/dwf/pipeline.dwf.ts',
+  dwfhuman:     'samples/dwf/ask-human.dwf.ts',
+  dwfroute:     'samples/dwf/route-models.dwf.ts',
 };
 
 // dsh mounts this page under a route prefix (default /workflow) and keeps the
@@ -62,6 +83,8 @@ const els = {
   artifactsList: $('artifactsList'),
   artifactsEmpty: $('artifactsEmpty'),
   artifactCountBadge: $('artifactCountBadge'),
+  // v0.14.0: the four analysis graphs
+  graphsList: $('graphsList'),
   // v0.11.0: journal replay trail
   journalTrail: $('journalTrail'),
   journalBadge: $('journalBadge'),
@@ -754,10 +777,12 @@ async function loadScript(path) {
 for (const btn of document.querySelectorAll('[data-sample]')) {
   btn.addEventListener('click', () => {
     const key = btn.dataset.sample;
-    const rel = SAMPLES[key];
+    const rel = SAMPLES[key] || DWF_SAMPLES[key];
     if (!rel) return;
     fetch(api('/samples')).then((r) => r.json()).then(({ samplesDir }) => {
-      const abs = samplesDir.replace(/\\/g, '/') + '/' + rel.split('/').pop();
+      // The path is relative to the samples directory, so a sample can live
+      // in a subdirectory (samples/dwf/) and still resolve.
+      const abs = samplesDir.replace(/\\/g, '/') + '/' + rel.replace(/^samples\//, '');
       els.path.value = abs;
       loadScript(abs);
     }).catch(() => {
@@ -787,23 +812,46 @@ async function startRun(scriptPath, allowlist) {
   els.reportsList.innerHTML = '';
   els.artifactsList.innerHTML = '';
   els.logView.innerHTML = '';
+  els.graphsList.innerHTML = '';
   els.runIdBadge.textContent = 'starting…';
   setStatus('starting', 'status-running');
   els.runBtn.disabled = true;
   els.stopBtn.disabled = false;
   const amendFrom = (els.amendFromInput && els.amendFromInput.value || '').trim() || undefined;
+  // v0.14.0: a `.dwf.ts` script goes to the ENGINE path — it is compiled
+  // before it runs, and the compile is what produces the analysis graphs.
+  // Everything else keeps the child-process path.
+  const isEngine = /\.dwf\.ts$/i.test(scriptPath);
+  const endpoint = isEngine ? '/engine/run' : '/run';
+  const requestBody = isEngine
+    ? {
+        scriptPath,
+        worldRunAllowlist: allowlist,
+        name: scriptPath.split(/[\\/]/).pop(),
+      }
+    : { scriptPath, worldRunAllowlist: allowlist, amendFrom };
   try {
-    const res = await fetch(api('/run'), {
+    const res = await fetch(api(endpoint), {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ scriptPath, worldRunAllowlist: allowlist, amendFrom }),
+      body: JSON.stringify(requestBody),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'run failed: HTTP ' + res.status);
+      // The engine path reports a compile failure as { status, diagnostics, error }.
+      const diags = err.diagnostics || (err.error && err.error.diagnostics);
+      if (diags && diags.length) {
+        const e = new Error((err.error && err.error.message) || err.message || 'the workflow did not compile');
+        e.diagnostics = diags;
+        throw e;
+      }
+      throw new Error((err.error && err.error.message) || err.error || 'run failed: HTTP ' + res.status);
     }
     const j = await res.json();
     currentRunId = j.runId;
     els.runIdBadge.textContent = shortRunId();
+    // The engine path hands back the graphs with the run: they are known
+    // before the first token comes back.
+    if (j.graphs) renderGraphs(els.graphsList, j.graphs);
     if (currentStream) { try { currentStream.close(); } catch (_) {} currentStream = null; }
     currentStream = new EventSource(api('/stream') + '?runId=' + currentRunId);
     currentStream.onmessage = (msg) => {
@@ -864,6 +912,9 @@ async function refreshFromState() {
     renderReports(snap);
     renderArtifacts(snap);
     renderJournalBadge(snap);
+    // v0.14.0: the engine path's compile produced the graphs, so they ride
+    // along with the state.
+    renderGraphs(els.graphsList, snap.engine ? snap.engine.graphs : null);
   } catch (_) {}
 }
 

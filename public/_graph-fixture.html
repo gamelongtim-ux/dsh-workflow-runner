@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>graph view fixture</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="page">
+  <section class="card">
+    <h2>Graph view fixture</h2>
+    <div id="graphsList" class="graphs"></div>
+    <pre id="report" class="snippet-out"></pre>
+  </section>
+  <script type="module">
+    import { renderGraphs } from './graph-view.js';
+    const res = await fetch('./_graph-fixture.json');
+    const graphs = await res.json();
+    const host = document.getElementById('graphsList');
+    renderGraphs(host, graphs);
+    document.title = 'graph view fixture — rendered';
+
+    // Walk the tabs with a real click, and record what each one shows. This
+    // is the check that matters: the tab wiring has to work, not just the
+    // first panel.
+    const report = document.getElementById('report');
+    const lines = [];
+    const buttons = [...document.querySelectorAll('.graph-tab')];
+    for (const btn of buttons) {
+      btn.click();
+      const panels = [...document.querySelectorAll('.graph-panel')];
+      const visible = panels.filter((p) => !p.hidden);
+      const active = buttons.filter((b) => b.classList.contains('active')).map((b) => b.textContent);
+      const text = visible.map((p) => p.textContent.replace(/\s+/g, ' ').trim().slice(0, 90));
+      lines.push(`${btn.textContent}: active=${JSON.stringify(active)} visible=${visible.length} text=${JSON.stringify(text)}`);
+    }
+    report.textContent = lines.join('\n');
+    document.title = 'graph view fixture — walked ' + buttons.length + ' tabs';
+  </script>
+</body>
+</html>

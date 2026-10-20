@@ -21,3 +21,13 @@ if (!skill.includes('name: dynamic-workflows')) {
   process.exit(1);
 }
 console.log('the skill is there,', skill.length, 'bytes');
+
+// The graph view is a separate module the editor imports; if it goes missing
+// the Graphs tab dies silently, because the import is static and the page
+// still loads.
+const graphView = await import(pathToFileURL(join(repoRoot, 'public', 'graph-view.js')).href);
+if (typeof graphView.renderGraphs !== 'function') {
+  console.error('public/graph-view.js does not export renderGraphs');
+  process.exit(1);
+}
+console.log('the graph view is there');

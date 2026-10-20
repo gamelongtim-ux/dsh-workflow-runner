@@ -1,0 +1,440 @@
+{
+  "site": {
+    "actors": [
+      {
+        "id": "actor#1",
+        "loc": {
+          "column": 20,
+          "line": 24
+        },
+        "name": "planner"
+      },
+      {
+        "id": "actor#2",
+        "loc": {
+          "column": 24,
+          "line": 29
+        },
+        "name": "critic"
+      },
+      {
+        "id": "actor#3",
+        "loc": {
+          "column": 11,
+          "line": 39
+        },
+        "name": "reviser"
+      }
+    ],
+    "edges": [
+      {
+        "exact": true,
+        "from": "ask#1",
+        "kind": "data",
+        "to": "ask#2",
+        "type": "Plan"
+      },
+      {
+        "exact": true,
+        "from": "ask#2",
+        "kind": "data",
+        "to": "ask#3",
+        "type": "Critique"
+      },
+      {
+        "exact": true,
+        "from": "ask#1",
+        "kind": "data",
+        "to": "ask#3",
+        "type": "Plan"
+      },
+      {
+        "exact": true,
+        "from": "ask#1",
+        "kind": "data",
+        "to": "sink",
+        "type": "Plan"
+      },
+      {
+        "exact": true,
+        "from": "ask#3",
+        "kind": "data",
+        "to": "sink",
+        "type": "Plan"
+      },
+      {
+        "exact": true,
+        "from": "ask#2",
+        "kind": "data",
+        "to": "sink",
+        "type": "Critique"
+      },
+      {
+        "exact": true,
+        "from": "source",
+        "kind": "data",
+        "to": "ask#1"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "source",
+        "kind": "source",
+        "label": "source"
+      },
+      {
+        "id": "ask#1",
+        "kind": "ask",
+        "label": "planner",
+        "loc": {
+          "column": 4,
+          "line": 25
+        },
+        "actors": [
+          "actor#1"
+        ],
+        "artifactType": "Plan"
+      },
+      {
+        "id": "ask#2",
+        "kind": "ask",
+        "label": "critic",
+        "loc": {
+          "column": 4,
+          "line": 30
+        },
+        "actors": [
+          "actor#2"
+        ],
+        "artifactType": "Critique"
+      },
+      {
+        "id": "ask#3",
+        "kind": "ask",
+        "label": "reviser",
+        "loc": {
+          "column": 8,
+          "line": 40
+        },
+        "actors": [
+          "actor#3"
+        ],
+        "artifactType": "Plan"
+      },
+      {
+        "id": "sink",
+        "kind": "sink",
+        "label": "sink"
+      }
+    ]
+  },
+  "causality": {
+    "edges": [
+      {
+        "certainty": "always",
+        "from": "ask#1",
+        "kind": "data",
+        "to": "ask#2",
+        "exact": true
+      },
+      {
+        "certainty": "maybe",
+        "from": "ask#2",
+        "kind": "control",
+        "to": "ask#3"
+      }
+    ],
+    "lanes": [
+      {
+        "id": "actor#1",
+        "loc": {
+          "column": 20,
+          "line": 24
+        },
+        "name": "planner"
+      },
+      {
+        "id": "actor#2",
+        "loc": {
+          "column": 24,
+          "line": 29
+        },
+        "name": "critic"
+      },
+      {
+        "id": "actor#3",
+        "loc": {
+          "column": 11,
+          "line": 39
+        },
+        "name": "reviser"
+      }
+    ],
+    "phaseEdges": [
+      {
+        "certainty": "always",
+        "from": "phase#1",
+        "kind": "data",
+        "to": "phase#2"
+      },
+      {
+        "certainty": "maybe",
+        "from": "phase#2",
+        "kind": "control",
+        "to": "phase#3"
+      }
+    ],
+    "phases": [
+      {
+        "id": "phase#1",
+        "loc": {
+          "column": 1,
+          "line": 22
+        },
+        "name": "plan"
+      },
+      {
+        "id": "phase#2",
+        "loc": {
+          "column": 1,
+          "line": 27
+        },
+        "name": "critique"
+      },
+      {
+        "id": "phase#3",
+        "loc": {
+          "column": 1,
+          "line": 32
+        },
+        "name": "revise"
+      }
+    ],
+    "regions": [
+      {
+        "id": "seq#1",
+        "kind": "seq"
+      },
+      {
+        "id": "branch#1",
+        "kind": "branch",
+        "parent": "seq#1",
+        "loc": {
+          "column": 5,
+          "line": 39
+        }
+      }
+    ],
+    "steps": [
+      {
+        "certainty": "always",
+        "id": "ask#1",
+        "kind": "ask",
+        "label": "planner",
+        "lane": "actor#1",
+        "loc": {
+          "column": 4,
+          "line": 25
+        },
+        "region": "seq#1",
+        "phase": "phase#1"
+      },
+      {
+        "certainty": "always",
+        "id": "ask#2",
+        "kind": "ask",
+        "label": "critic",
+        "lane": "actor#2",
+        "loc": {
+          "column": 4,
+          "line": 30
+        },
+        "region": "seq#1",
+        "phase": "phase#2"
+      },
+      {
+        "certainty": "maybe",
+        "id": "ask#3",
+        "kind": "ask",
+        "label": "reviser",
+        "lane": "actor#3",
+        "loc": {
+          "column": 8,
+          "line": 40
+        },
+        "region": "branch#1",
+        "phase": "phase#3"
+      }
+    ],
+    "sink": {
+      "fedBy": [
+        "ask#3"
+      ]
+    }
+  },
+  "controlFlow": {
+    "edges": [
+      {
+        "from": "entry",
+        "kind": "next",
+        "to": "phase#1@1"
+      },
+      {
+        "from": "phase#1@1",
+        "kind": "next",
+        "to": "ask#1@1"
+      },
+      {
+        "from": "ask#1@1",
+        "kind": "next",
+        "to": "phase#2@1"
+      },
+      {
+        "from": "phase#2@1",
+        "kind": "next",
+        "to": "ask#2@1"
+      },
+      {
+        "from": "ask#2@1",
+        "kind": "next",
+        "to": "phase#3@1"
+      },
+      {
+        "from": "phase#3@1",
+        "kind": "branch",
+        "to": "ask#3@1"
+      },
+      {
+        "from": "phase#3@1",
+        "kind": "jump",
+        "to": "sink",
+        "via": "return"
+      },
+      {
+        "from": "ask#3@1",
+        "kind": "jump",
+        "to": "sink",
+        "via": "return"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "phase#1@1",
+        "kind": "mark",
+        "phase": "phase#1"
+      },
+      {
+        "id": "ask#1@1",
+        "kind": "issue",
+        "site": "ask#1",
+        "phase": "phase#1"
+      },
+      {
+        "id": "phase#2@1",
+        "kind": "mark",
+        "phase": "phase#2"
+      },
+      {
+        "id": "ask#2@1",
+        "kind": "issue",
+        "site": "ask#2",
+        "phase": "phase#2"
+      },
+      {
+        "id": "phase#3@1",
+        "kind": "mark",
+        "phase": "phase#3"
+      },
+      {
+        "id": "ask#3@1",
+        "kind": "issue",
+        "site": "ask#3",
+        "phase": "phase#3"
+      }
+    ],
+    "phaseEdges": [
+      {
+        "from": "entry",
+        "kind": "next",
+        "to": "phase#1"
+      },
+      {
+        "from": "phase#1",
+        "kind": "next",
+        "to": "phase#2"
+      },
+      {
+        "from": "phase#2",
+        "kind": "next",
+        "to": "phase#3"
+      },
+      {
+        "from": "phase#3",
+        "kind": "jump",
+        "to": "sink",
+        "via": "return"
+      }
+    ],
+    "phases": [
+      {
+        "id": "phase#1",
+        "loc": {
+          "column": 1,
+          "line": 22
+        },
+        "name": "plan"
+      },
+      {
+        "id": "phase#2",
+        "loc": {
+          "column": 1,
+          "line": 27
+        },
+        "name": "critique"
+      },
+      {
+        "id": "phase#3",
+        "loc": {
+          "column": 1,
+          "line": 32
+        },
+        "name": "revise"
+      }
+    ]
+  },
+  "handoff": {
+    "handoffs": [],
+    "participants": [
+      {
+        "id": "phase#1:actor#1",
+        "lane": "actor#1",
+        "phase": "phase#1",
+        "steps": [
+          "ask#1"
+        ]
+      },
+      {
+        "id": "phase#2:actor#2",
+        "lane": "actor#2",
+        "phase": "phase#2",
+        "steps": [
+          "ask#2"
+        ]
+      },
+      {
+        "id": "phase#3:actor#3",
+        "lane": "actor#3",
+        "phase": "phase#3",
+        "steps": [
+          "ask#3"
+        ]
+      }
+    ]
+  },
+  "sizes": {
+    "site": 5,
+    "causality": 3,
+    "controlFlow": 6,
+    "handoff": 3
+  }
+}

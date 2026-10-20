@@ -15,3 +15,8 @@
 # The build itself is reproduced on install from a git checkout (npm runs
 # "prepare" there). A tarball installed from the registry carries the built
 # output directly.
+
+# The graph-render fixture: a dev artifact for checking public/graph-view.js in
+# a browser. It is not part of the plugin.
+public/_graph-fixture.html
+public/_graph-fixture.json
