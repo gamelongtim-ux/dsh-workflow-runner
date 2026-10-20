@@ -582,10 +582,36 @@ dsh 自带 `dsh-tool-workflow`，但形态与 ZCode Dynamic Workflow **完全不
   `resources/app.asar\dsh\node_modules\@deepseek-ai\`（194 个包），形态是**已编译 JS**。
 - 解析优先级是 **installation 优先，再 profile 的 node_modules**（`dsh/README.md:46`）——
   这解释了 `dsh-base` / `dsh-web-app` 为何不在 profile 的 `node_modules` 里。
+- `zod` + `zod-to-json-schema` **已经在 profile 里**，ZCode 的工具 schema 依赖可直接满足。
 - **本机 marketplace 状态里 `dsh-workflow-runner` 当前是 disabled**
   （`profiles/desktop/.dsh-market/state.json` → `{"disabled":["dsh-workflow-runner"]}`）。
   验证新版本前需要先在插件市场里打开。
-- `zod` + `zod-to-json-schema` **已经在 profile 里**，ZCode 的工具 schema 依赖可直接满足。
+
+### V6 — npm 发布的 403：账号只读状态
+
+**现象**：`npm publish` 走完浏览器的 2FA 之后，PUT 才被 registry 拒绝：
+
+```
+npm error code E403
+npm error 403 Forbidden - PUT https://registry.npmjs.org/dsh-workflow-runner -
+npm error   Your account has been temporarily suspended due to a recent
+npm error   security-sensitive action.
+```
+
+**根因**：npm 把「用 2FA 恢复码冒充 OTP」这类动作记为 security-sensitive action，并据此把账号
+置入 **72 小时只读状态**——期间禁止发布、token 管理、包可见性变更与 org/team 变更。
+`npm whoami` 仍然正常（读权限没挂），所以看起来像「token 没问题但发不上去」。
+
+**处置**：
+1. **等**。状态自动解除，不需要做任何操作。
+2. **绝不要用恢复码去「修」**——每用一次就重新计时 72 小时。恢复码只用于**登录救急**，
+   永远不要塞进 `--otp`。
+3. 解封后直接 `npm publish --access public --auth-type=web`。版本号与 tag 都已就位，
+   **不要重跑 `npm version`**——失败的 publish 之后再 `npm version` 会留下孤儿版本号和孤儿 tag。
+4. 需要人工申诉：https://support.npmjs.com/ ，附上账号名和这条 403。
+
+`scripts/publish-release.ps1` 识别这两种情况（账号只读 / EOTP 没拿到 2FA）并直接给出上面的
+处置，而不是把原始 403 甩给你。
 
 ---
 
