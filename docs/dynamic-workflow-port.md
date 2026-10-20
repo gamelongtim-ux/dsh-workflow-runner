@@ -30,9 +30,12 @@
 | 阶段 | 状态 | 说明 |
 |---|---|---|
 | **A. vendor + 构建流水线** | ✅ 完成 | 两个上游包进仓；`npm run build` 出 dist；`npm run verify:vendor` 校验字节一致；CI 建包 + 校验 + 冒烟 |
-| **B. 适配层（编译期 + 引擎驱动）** | ✅ 完成 | `lib/dwf/`：`prepare.js`（四图 + lowering + schema）、`driver.js`（WorkflowDriver 四个端口）、`index.js`（`runDwfWorkflow`） |
-| **端到端验证** | ✅ PASS | `node scripts/dwf-smoke.mjs`：编译 → 分析 → 降级 → 子进程 vm → NDJSON 桥 → 引擎结算 `completed`，journal 4 条节点行 + 2 条 actor 行 + 22 tokens |
-| **C. 接入 dsh 现有 runtime** | ⬜ 未开始 | 把 `lib/runtime.js` 的 LLM / 沙箱 / artifact / 事件接到 `lib/dwf` 的 `services` 上 |
+| **B. 适配层（编译期 + 引擎驱动）** | ✅ 完成 | `lib/dwf/`：`prepare.js`（四图 + lowering + schema）、`driver.js`（WorkflowDriver 四个端口）、`index.js`（`runDwfWorkflow`）、`host.js`（dsh 侧服务 + 事件翻译） |
+| **端到端验证** | ✅ PASS | `scripts/dwf-smoke.mjs`：编译 → 分析 → 降级 → 子进程 vm → NDJSON 桥 → 引擎结算 `completed` |
+| **C. 接入 dsh 现有 runtime** | ✅ 完成 | `lib/runtime.js` 的 `startEngine()`；run state 抽成 `#newState`（两条路径共用）；phase/report 抽成 `#enterPhase`/`#recordReport`；`stop()` 支持 abort 引擎 run；`ctx.llm` 的模型调用做成可注入 |
+| **C 的验收** | ✅ PASS | `scripts/dwf-runtime-smoke.mjs`：run 完成、产物正确、phase/agent/report/journal 落在同一 state 形状上、四张图非空、**路径逃逸与 symlink 逃逸双双被拒且给出原因** |
+| **C 顺带修掉的三个缺陷** | ✅ | ① 相对路径按 `process.cwd()` 解析（应按工作区根）② 围栏纯词法判断，symlink 可逃逸 ③ `#runGit` 把**未洗白的 host env** 给了 git 子进程（API key 泄漏） |
+| **旧路径回归** | ✅ PASS | `scripts/legacy-smoke.mjs`：子进程路径照常工作 |
 | **D. dsh 独有 facade 能力** | ⬜ 未开始 | `askUser` / `escalate` / `stages` / `route` / `t` / `concurrency` / `models` / `constants` 的 facade 声明与运行时 |
 | **E. 模型面工具 + 内置 skill** | ⬜ 未开始 | `CreateWorkflow` 等 tool + 改写后的 `dynamic-workflows` skill |
 | **F. 编辑器四图 + samples 迁移** | ⬜ 未开始 | 四图渲染；现有 30 个 sample 从 `ask(prompt, {result})` 迁到 `ask<T>()` |
@@ -356,22 +359,33 @@ Copy-Item "$S\lib","$S\public","$S\samples","$S\package.json","$S\cordis.patch.y
 - `lib/dwf/index.js`：`runDwfWorkflow()` 串起 compile → harness → 引擎 → 结算
 - `scripts/dwf-smoke.mjs`：端到端冒烟，**PASS**
 
-### 阶段 C — 接入 dsh 现有 runtime ⬜ 下一步
+### 阶段 C — 接入 dsh 现有 runtime ✅ 已完成
 
 把 `lib/runtime.js` 的能力接到 `lib/dwf` 的 `services` 上：
 
-| `services` 成员 | dsh 现有实现 | 要做的事 |
+| `services` 成员 | dsh 现有实现 | 状态 |
 |---|---|---|
-| `askModel` | `#agentAsk` → `chat()` | 换成「带 schema 的单轮调用」；typed ask 走 schema-in-prompt，untyped 走末轮文本 |
-| `worldRead` | `#filesRead` / `#filesGlob` / `#filesGrep` / `#git*` / `#worldRun` | **把路径围栏 / 文件 cap / git 允许清单下沉到这里**（用户选定的收口点） |
-| `publishArtifact` | `#artifactPublish` | 补 ZCode 要求的越界拒绝 + contentType 推断 |
-| `emit` | `#broadcast` → SSE | 映射 ZCode 的 `RunEvent` → dsh 的 UI 事件 |
-| `resolveModel` | `ctx.llm.resolveCallConfig` | 解析子代理实际跑在哪个模型上 |
-| `journal` | `s.journal` 扁平数组 | 换成 `InMemoryJournalStore` + write-through 持久化 |
+| `askModel` | 一次模型轮次；schema 由编译期从 `ask<T>` 合成 | ✅ 新增 `lib/dwf/host.js`；typed 的校验与 repair 预算归引擎 |
+| `worldRead` | `#filesRead` / `#filesGlob` / `#filesGrep` / `#git*` / `#worldRun` | ✅ op 名一一对应；**围栏随这些方法一起生效** |
+| `publishArtifact` | `#artifactPublish` | ✅ 引擎算 version，store 也算 version，分歧会报警 |
+| `emit` | `#broadcast` → SSE | ✅ 27 个引擎事件类型逐个映射；phase/report/log 走共享副作用 |
+| `resolveModel` | `s.modelsAllowed` | ✅ persona 点名的模型优先 |
+| `journal` | `InMemoryJournalStore` + write-through | ✅ 引擎的 journal 是真相，dsh 的扁平 journal 是镜像 |
 
-**同时要核对**：`lib/runtime.js:454` 的子进程 spawn **没有**带 `ELECTRON_RUN_AS_NODE=1`，
-而 dsh 桌面端是 Electron。vendored harness 已经带上了（`harness.ts:292`），但 dsh 现有的
-`world.run` 子进程路径需要单独核对。
+**共享代码**（两条路径共用，避免语义漂移）：
+- `#newState` — run state 的唯一工厂，两条路径同一形状
+- `#enterPhase` / `#recordReport` — phase 折叠与 report 路由的唯一实现
+
+**顺带修掉的三个缺陷**：
+1. `#resolveInWorkspace` 把**相对路径**按 `process.cwd()` 解析——facade 契约写的是「工作区相对」，
+   而引擎路径跑在宿主进程里，cwd 是 dsh 的启动目录。之前只是「碰巧」能用。
+2. 围栏是**纯词法**判断，工作区内的 symlink 指向外部可以逃逸。现在解析真实路径再比一次
+   （根也解析，因为 macOS 的临时目录本身就是链接）。
+3. `#runGit` 把**未洗白的 `process.env`** 给了 git 子进程——沙箱刚剥掉的 API key 原样还回去了。
+
+**验收**：`scripts/dwf-runtime-smoke.mjs` 全绿——run 完成、产物正确、phase/agent/report/journal
+落在同一 state 形状上、四张图非空、**路径逃逸与 symlink 逃逸双双被拒并说明原因**。
+`scripts/legacy-smoke.mjs` 确认旧路径照常工作。两者都在 CI 里跑，离线。
 
 ### 阶段 D — dsh 独有 facade 能力 ⬜
 
