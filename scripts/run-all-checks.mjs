@@ -21,13 +21,14 @@ const CHECKS = [
   ['dwf-samples-check.mjs', 'samples compile'],
   ['dwf-negative-check.mjs', 'negative fixtures refuse'],
   ['dwf-schema-diag-check.mjs', 'schema layer reports'],
+  ['dwf-schemastery-check.mjs', 'peer dep: schemastery', ['--import', './scripts/register-schemastery-stub.mjs']],
   ['check-pack-contents.mjs', 'package contents'],
   ['dwf-plugin-check.mjs', 'plugin entry'],
 ];
 
 let failed = 0;
-for (const [file, label] of CHECKS) {
-  const r = spawnSync(process.execPath, [join(here, file)], {
+for (const [file, label, args = []] of CHECKS) {
+  const r = spawnSync(process.execPath, [...args, join(here, file)], {
     encoding: 'utf8',
     cwd: join(here, '..'),
   });

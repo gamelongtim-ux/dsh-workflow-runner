@@ -8,6 +8,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.2] — 2026-10-20
+
+The plugin now imports in a real dsh profile. It did not, before.
+
+`@deepseek-ai/schemastery` is an optional peer dependency, and the plugin
+used it as `schemastery.z.object(...)`. The package publishes its `z`
+namespace as the **default** export — dsh's own plugins write
+`import z from '@deepseek-ai/schemastery'` — so a namespace import gives
+`{ default: Schema }` and `schemastery.z` is `undefined`. The `Config`
+schema was built at module scope, so the plugin threw while being imported
+and never activated.
+
+Nothing in the repository could see it: the package does not resolve there,
+so the plugin took the "no schemastery" branch and imported cleanly. Every
+real dsh profile has the package, so every real dsh profile got a broken
+plugin. It surfaced when the installed copy was loaded from the profile
+itself, where the peer dependency *does* resolve.
+
+The fix has two halves:
+
+- **The right API.** Descriptions are `.description()`, an integer is
+  `.step(1)`, and a field that may be null and may be absent is
+  `.default(null)`. Each of those was checked against the real package
+  (`scripts/probe-schemastery.mjs`), not assumed — an optional peer
+  dependency is exactly where an assumption becomes a plugin that will not
+  import.
+- **A guard that covers the use, not just the import.** Everything that
+  touches schemastery — the import, the unwrap, the schema construction —
+  now happens inside one guard. A failure anywhere in it costs the Settings
+  card, not the plugin.
+
+`scripts/dwf-schemastery-check.mjs` runs the plugin against a stub with the
+same shape as the real package, so the branch that used to be untested is
+the branch under test. The stub asserts its own fidelity: no `z`, no
+`.describe()`, no `.nullable()`, no `.optional()`, no `.int()`.
+
+`scripts/verify-profile-install.mjs` does the same check against the copy
+actually installed in a dsh profile.
+
 ## [0.15.1] — 2026-10-20
 
 The package stops shipping its own dev artifacts.
