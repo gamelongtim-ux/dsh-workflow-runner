@@ -19,6 +19,11 @@
 #     401 on /user and /-/whoami, and with a misleading 404 on the publish PUT
 #     ("could not be found or you do not have permission"). This script checks
 #     the auth FIRST, so a dead token is reported as a dead token.
+#   - The account may have 2FA on. npm's web-auth flow only runs in an
+#     interactive terminal (npm/lib/utils/auth.js:10 bails out when stdin or
+#     stdout is not a TTY), so run this script from a real terminal, not from
+#     a redirected shell: npm then opens the browser, waits for the
+#     authorization, and finishes the publish itself.
 #   - `npm publish` runs the `prepare` script, which builds the vendored
 #     engine. A build failure aborts the publish after the tarball is made.
 #
@@ -48,8 +53,29 @@ function Write-Warn2($text) { Write-Host "    $text" -ForegroundColor Yellow }
 
 # ————————————————————————— 1. the token —————————————————————————
 
+# A token already in the npmrc is the normal case, and it means the script
+# needs no input at all. Only reach for the clipboard / file / argument when
+# there is no usable token there yet.
+function Test-ExistingToken {
+  if (-not (Test-Path $npmrc)) { return $null }
+  $existing = (Get-Content -LiteralPath $npmrc -Raw |
+    Select-String -Pattern '_authToken=(.+)' |
+    ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() })
+  if ([string]::IsNullOrWhiteSpace($existing)) { return $null }
+  $ErrorActionPreference = 'Continue'
+  $out = (& npm whoami 2>&1 | Out-String).Trim()
+  $code = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($code -ne 0) { return $null }
+  return [pscustomobject]@{ Token = $existing; Who = $out }
+}
+
 Write-Step 'Resolving the npm token'
-if ([string]::IsNullOrWhiteSpace($Token)) {
+$have = Test-ExistingToken
+if ($have -ne $null -and [string]::IsNullOrWhiteSpace($Token) -and [string]::IsNullOrWhiteSpace($TokenFile)) {
+  Write-Ok "the npmrc already holds a token that works ($($have.Who))"
+  $Token = $have.Token
+} elseif ([string]::IsNullOrWhiteSpace($Token)) {
   if (-not [string]::IsNullOrWhiteSpace($TokenFile)) {
     $Token = (Get-Content -LiteralPath $TokenFile -Raw).Trim()
     Write-Ok "read from $TokenFile"
@@ -96,8 +122,7 @@ if ($Proxy -ne '') {
 Write-Step 'Checking the token against the registry'
 Push-Location $repoRoot
 try {
-  # npm writes its error to stderr; under PowerShell 5.1 that surfaces as a
-  # NativeCommandError record, so collect it instead of letting it escape.
+  # npm writes its error to stderr; under PowerShell 5.1 that surfaces as a  # NativeCommandError record, so collect it instead of letting it escape.
   $ErrorActionPreference = 'Continue'
   $whoami = (& npm whoami 2>&1 | Out-String).Trim()
   $code = $LASTEXITCODE
@@ -129,6 +154,10 @@ if ($CheckOnly) {
 # ————————————————————————— 4. publish —————————————————————————
 
 Write-Step 'Publishing'
+if ([Environment]::UserInteractive) {
+  Write-Host '    If the account has 2FA on, npm will open your browser to authorize' -ForegroundColor DarkGray
+  Write-Host '    this publish (or print a URL to open). That step needs you.' -ForegroundColor DarkGray
+}
 Push-Location $repoRoot
 try {
   $ErrorActionPreference = 'Continue'
