@@ -84,6 +84,12 @@ jobs:
       - name: Smoke: the model-facing tools
         run: node scripts/dwf-tools-smoke.mjs
 
+      # Every shipped sample must compile. The compile-time layer is the point
+      # of the engine path, and a sample that drifts out of the contract
+      # should fail here rather than in a user's run.
+      - name: Check: the shipped samples compile
+        run: node scripts/dwf-samples-check.mjs
+
       # The plugin entry must load, and the bundled skill must be there for
       # the brief tool to hand out.
       - name: Check: the plugin entry and the bundled skill

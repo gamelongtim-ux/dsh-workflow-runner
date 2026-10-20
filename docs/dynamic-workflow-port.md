@@ -37,9 +37,9 @@
 | **C 顺带修掉的三个缺陷** | ✅ | ① 相对路径按 `process.cwd()` 解析（应按工作区根）② 围栏纯词法判断，symlink 可逃逸 ③ `#runGit` 把**未洗白的 host env** 给了 git 子进程（API key 泄漏） |
 | **C+. 接进 dsh 的 HTTP API** | ✅ 完成 | `POST /api/engine/compile`（只编译，出诊断 + 四张图 + 站点表 + 降级体）与 `POST /api/engine/run`（跑）；`/api/state` 带上 `engine` 段（诊断 + 图 + 结算） |
 | **旧路径回归** | ✅ PASS | `scripts/legacy-smoke.mjs`：子进程路径照常工作 |
-| **D. dsh 独有 facade 能力** | ⬜ 未开始 | `askUser` / `escalate` / `stages` / `route` / `t` / `concurrency` / `models` / `constants` 的 facade 声明与运行时 |
-| **E. 模型面工具 + 内置 skill** | ⬜ 未开始 | `CreateWorkflow` 等 tool + 改写后的 `dynamic-workflows` skill |
-| **F. 编辑器四图 + samples 迁移** | ⬜ 未开始 | 四图渲染；现有 30 个 sample 从 `ask(prompt, {result})` 迁到 `ask<T>()` |
+| **D. dsh 独有 facade 能力** | ✅ 完成 | `askUser`/`escalate`/`route`/`models`/`concurrency.stat`/`stages`/`constants` 全部在引擎路径上可用；**上游一个字节未改**（声明进 facade，实现作为 sandbox 全局注入，宿主往返走 worldRead 通道） |
+| **E. 模型面工具 + 内置 skill** | ✅ 完成 | 10 个 tool 注册到宿主 `tools` 服务；`skill/dynamic-workflows/SKILL.md` 注册到 `skills` 服务；**硬门禁**：`create_workflow` 在模型读过契约前拒绝执行 |
+| **F. 编辑器四图 + samples 迁移** | 🔶 部分 | 四图已进 `/api/state` 与 `/api/engine/compile`；`samples/dwf/` 已迁到 `ask<T>()` 作者面；**编辑器的四图渲染与 30 个旧 sample 的全量迁移待做** |
 
 ### 已验证的硬事实
 

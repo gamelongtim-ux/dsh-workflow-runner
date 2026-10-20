@@ -8,6 +8,89 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.14.0] — 2026-10-20
+
+The port becomes usable. v0.13.0 landed the engine; this release makes it
+dsh's own — the capabilities dsh had that ZCode's facade did not, the tools
+the model drives it with, and the authoring contract that gates them.
+
+### dsh's own facade, on the engine path
+
+`askUser`, `escalate`, `route`, `models`, `concurrency.stat`, `stages` and
+`constants` all work on the engine path, **without touching a byte of the
+vendored upstream**:
+
+- The **declarations** go into the facade text. `createWorkflowProgram` takes
+  a `facadeDts` override, so the compiler sees dsh's members and the author
+  gets them typechecked. The file name stays `workflow-facade.d.ts` — the
+  engine recognises facade identity by that name, in five places, and a
+  different name leaves the site table silently empty.
+- The **implementations** are installed as globals of the sandbox, by
+  prepending them to the lowered body. The body runs inside the vm context,
+  and `globalThis` there is the context's own global object — the cell does
+  not freeze or seal it. The lowering leaves these members alone: they are in
+  none of the engine's registries, so they produce no site and no rewrite,
+  and they stay free identifiers, which is exactly what a global is.
+- The four that need the host ride the **worldRead** channel. The cell's
+  `__host` object is fixed at ten members, and adding one would mean editing
+  upstream — but `worldRead`'s op string is passed through untouched to the
+  driver, so an op no ZCode op uses is a channel of its own.
+
+The pending-question and pending-escalate records gained a deferred, so the
+engine path — which has no child RPC to park — can wait for the human the
+same way the legacy path does.
+
+`t` is deliberately **not** ported: the shape builder fed dsh's old
+`ask(prompt, { result: shape })` form, and the engine path has `ask<T>()`
+instead. Carrying it over would be carrying a dead API.
+
+### The model-facing tools
+
+Ten tools, on the host's `tools` service:
+
+| Tool | What it does |
+|---|---|
+| `dynamic_workflows_brief` | the authoring contract |
+| `create_workflow` | compile and run |
+| `amend_workflow` | inject a stage into a live run |
+| `save_workflow` | keep one, with a description and a note |
+| `list_saved_workflows` | what is kept |
+| `list_workflow_runs` | what has run |
+| `get_workflow_run` | one run in full |
+| `resolve_workflow_question` | answer a question a run asked the human |
+| `fill_workflow_hole` | write the code a run parked on |
+| `eval_workflow_snippet` | try one piece before it is a whole workflow |
+
+**The gate.** ZCode refuses to accept a workflow script from a model that has
+not read the authoring contract, because the contract is the only place the
+rules live. The same holds here: `create_workflow` refuses until
+`dynamic_workflows_brief` has been called, and the refusal says so. The gate
+is **per agent**, not per session — two agents in one session are two
+authors, and one of them reading the contract tells the other nothing.
+
+The contract is `skill/dynamic-workflows/SKILL.md` — one file, two
+consumers: the skill system hands it to the user, the brief tool hands it to
+the model. It is dsh-native rather than a port: ZCode's is 93KB and assumes
+ZCode's paths, tool names and UI vocabulary.
+
+`amend_workflow` is dsh's **structural** amend — it injects a stage into a
+live run, sharing that run's subagents, their chat history, its workspace
+confinement and its sandbox. ZCode's `AmendWorkflow` is the other thing: a
+re-run against an imported cache. Different mechanism, different contract, and
+the structural one is what dsh's runtime has always done.
+
+The engine's live control plane is now bound, so a parked hole can be filled
+and a run's ceiling can be changed while it is going.
+
+### Samples in the new authoring surface
+
+`samples/dwf/` holds six workflows in the `ask<T>()` style: a smoke test, a
+typed scan, a plan-critique-revise loop, a channel pipeline, the human
+question, and model routing. `npm run` — the CI job — compiles every one of
+them, and the compile-time layer is strict enough to have caught two real
+mistakes in them: a local `const concurrency` shadowing the global, and a
+repeated actor name.
+
 ## [0.13.0] — 2026-10-20
 
 The ZCode Dynamic Workflow port, stage A and B: ZCode's own engine and
