@@ -24,6 +24,11 @@
 #     stdout is not a TTY), so run this script from a real terminal, not from
 #     a redirected shell: npm then opens the browser, waits for the
 #     authorization, and finishes the publish itself.
+#     If the account uses a SECURITY KEY (webauthn), that ceremony has to
+#     happen in a real browser: the in-app Electron browser cannot reach the
+#     OS credential provider, and the get() call ends in NotAllowedError.
+#     npm's own flow handles this - it opens your default browser, you touch
+#     the key, and npm finishes the publish.
 #   - `npm publish` runs the `prepare` script, which builds the vendored
 #     engine. A build failure aborts the publish after the tarball is made.
 #
