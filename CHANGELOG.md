@@ -8,6 +8,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.1] — 2026-10-20
+
+The package stops shipping its own dev artifacts.
+
+`public/` is listed in package.json's `files` as a directory, and npm keeps
+**everything** inside a listed directory — the `.npmignore` rule that was
+meant to keep the graph-render fixture out of the tarball did nothing, and
+both fixture files went into the package. The `.npmignore` file documented an
+intent the package did not honour.
+
+`public/` is now listed file by file, and `scripts/check-pack-contents.mjs`
+runs on `prepack` to keep it that way: every name in `files` must exist, and
+every file `.npmignore` excludes must genuinely stay out of the tarball —
+not listed by name, and not inside a directory that is listed wholesale. The
+failure it reports is the one that actually happened.
+
 ## [0.15.0] — 2026-10-20
 
 The author surface becomes visible. v0.14.0 made the engine dsh's own; this

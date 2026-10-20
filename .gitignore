@@ -7,6 +7,9 @@ node_modules/
 dev-smoke.mjs
 dev-probe-gcm.ps1
 
+# the tarball `npm pack` produces, for handing to the dsh profile installer
+*.tgz
+
 # feasibility spike: vendored ZCode engine + its own node_modules/build output.
 # Source of truth is the ZCode repo; this directory is reproducible, not authored.
 # See docs/dynamic-workflow-port.md §8.

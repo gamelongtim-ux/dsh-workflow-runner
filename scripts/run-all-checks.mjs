@@ -21,6 +21,7 @@ const CHECKS = [
   ['dwf-samples-check.mjs', 'samples compile'],
   ['dwf-negative-check.mjs', 'negative fixtures refuse'],
   ['dwf-schema-diag-check.mjs', 'schema layer reports'],
+  ['check-pack-contents.mjs', 'package contents'],
   ['dwf-plugin-check.mjs', 'plugin entry'],
 ];
 
