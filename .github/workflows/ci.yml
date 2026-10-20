@@ -57,6 +57,17 @@ jobs:
       - name: Smoke: a Dynamic Workflow runs end to end
         run: node scripts/dwf-smoke.mjs
 
+      # The same, but through dsh's own runtime: the run is registered in the
+      # runs map with the same state shape, and the sandbox fences are
+      # checked (a path escape and a symlink out must both be refused).
+      - name: Smoke: the engine path inside dsh's runtime
+        run: node scripts/dwf-runtime-smoke.mjs
+
+      # The legacy child-process path must keep working: v0.13.0 changed the
+      # path fence and made the model call injectable, and both touch it.
+      - name: Smoke: the legacy child-process path
+        run: node scripts/legacy-smoke.mjs
+
   syntax-check:
     name: node --check (lib + public + samples)
     runs-on: ubuntu-latest
