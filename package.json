@@ -31,6 +31,7 @@
     "lib",
     "public",
     "samples",
+    "skill",
     "packages",
     "cordis.patch.yml",
     "CHANGELOG.md",
