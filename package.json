@@ -1,6 +1,6 @@
 {
   "name": "dsh-workflow-runner",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Run ZCode-style Dynamic Workflows inside dsh (DeepSeek Harness). Workflows are TypeScript scripts analysed at compile time (site / causality / control-flow / hand-off graphs) and lowered to instrumented JS with stable site ids, so every agent.ask carries a typed result contract synthesized from ask<T> generics. The engine is ZCode's own @zcode/dynamic-workflow, vendored unmodified. On top of it: parallel LLM agents with real chat history, shell gates, artifact deliverables (file / markdown / chart / table / metrics / board), workspace file and git reads, in-process channel/future concurrency with a per-run ceiling, model routing, mid-run human questions, mid-run code injection (hole<T>), structural amend that injects a stage into a live run, escalate() with Think-via-LLM, saved workflows, snippet evaluation, on-disk run history, a per-run max_concurrency ceiling, explicit phase lifecycle events, channel-deadlock detection, and an OS-level sandbox whose path fences are enforced at the single world-read choke point. Live progress streams to the chat UI as overlay cards.",
   "license": "MIT",
   "keywords": [

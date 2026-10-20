@@ -62,7 +62,9 @@ report({
     name: s.name,
     status: s.status,
     result: s.result,
-    error: s.error,
+    // error 是可选属性，值里带着 undefined；被报告的条目必须是纯 JSON，
+    // 所以这里把 undefined 收成 null。
+    error: s.error ?? null,
   })),
 }, "stages");
 

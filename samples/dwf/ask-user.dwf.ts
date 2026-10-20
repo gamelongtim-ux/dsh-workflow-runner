@@ -16,7 +16,8 @@ log(`user confirm: ${ok}`);
 report({ step: "confirm", value: ok });
 
 if (!ok) {
-  phase("User declined — exit early");
+  // 提前退出：这一段归上一个 phase 管，所以这里只留一条日志说明为什么停。
+  log("the user declined; stopping before the rest of the run");
   return { ok: false, threshold, reason: "user declined" };
 }
 

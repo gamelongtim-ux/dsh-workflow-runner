@@ -8,6 +8,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.0] — 2026-10-20
+
+The author surface becomes visible. v0.14.0 made the engine dsh's own; this
+release draws it and moves the samples onto it.
+
+### The editor draws the four analysis graphs
+
+The engine produces four graphs — site, causality, control-flow and handoff —
+and they reached `/api/state` and `/api/engine/compile` as early as v0.13.0.
+Nothing drew them. Now `public/graph-view.js` renders all four, and the
+editor has a **Graphs** tab for them: site and control-flow share one node
+renderer, causality is a table, hand-off is a list of participants. The
+hand-off view names the actors, because an anonymous arrow is not a hand-off.
+
+`.dwf.ts` scripts now route to the engine path by extension, and the sample
+path resolver no longer drops the directory part of a path.
+
+### The samples, on the new authoring surface
+
+`samples/dwf/` now holds **33** workflows in the `ask<T>()` style. Every one
+of the 25 old `.mjs` samples has a counterpart; eight more cover surfaces the
+old set did not reach. The old `.mjs` files and the five top-level `.ts`
+files stay exactly where they were — the old path still works, and
+`legacy-smoke` still passes.
+
+A file whose purpose is to *fail* compilation cannot live in a directory that
+is compiled wholesale, so the negative fixtures moved to a sibling directory,
+`samples/dwf-negative/`, with a check that asserts not just "it fails" but
+"it fails on the diagnostic codes it was written to provoke". A fixture that
+broke for a different reason would otherwise pass while testing nothing.
+
+The compiler earned its keep during the migration. It caught a non-literal
+`phase()` name, a repeated actor name, a report tag pointing at no declared
+artifact, a preset declared inside a loop, a non-literal `world.run`
+command, a non-literal model name, a hole without a type argument, a facade
+call laundered through a local alias, and a `report` item carrying `undefined`
+into a non-optional property.
+
+### A real defect, found by that migration
+
+`prepareWorkflow` counted the schema diagnostics into its verdict but never
+carried them out, so a script refused by the data contract came back as "did
+not compile" with no reason attached — a `[FAIL]` with no text under it. The
+schema layer is now a third diagnostic layer, `collectPreparedDiagnostics`
+merges it, and `/api/engine/compile` inherits the fix.
+
+`node scripts/run-all-checks.mjs` runs all ten check scripts in one go.
+
 ## [0.14.0] — 2026-10-20
 
 The port becomes usable. v0.13.0 landed the engine; this release makes it

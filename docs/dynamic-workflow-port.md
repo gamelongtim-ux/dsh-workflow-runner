@@ -39,7 +39,7 @@
 | **旧路径回归** | ✅ PASS | `scripts/legacy-smoke.mjs`：子进程路径照常工作 |
 | **D. dsh 独有 facade 能力** | ✅ 完成 | `askUser`/`escalate`/`route`/`models`/`concurrency.stat`/`stages`/`constants` 全部在引擎路径上可用；**上游一个字节未改**（声明进 facade，实现作为 sandbox 全局注入，宿主往返走 worldRead 通道） |
 | **E. 模型面工具 + 内置 skill** | ✅ 完成 | 10 个 tool 注册到宿主 `tools` 服务；`skill/dynamic-workflows/SKILL.md` 注册到 `skills` 服务；**硬门禁**：`create_workflow` 在模型读过契约前拒绝执行 |
-| **F. 编辑器四图 + samples 迁移** | 🔶 部分 | 四图已进 `/api/state` 与 `/api/engine/compile`；`samples/dwf/` 已迁到 `ask<T>()` 作者面；**编辑器的四图渲染与 30 个旧 sample 的全量迁移待做** |
+| **F. 编辑器四图 + samples 迁移** | ✅ 完成 | 编辑器加 **Graphs 标签页**，`public/graph-view.js` 渲染 site / causality / control-flow / handoff 四张图；**33 个 `samples/dwf/*.dwf.ts`** 全部编译通过（25 个旧 `.mjs` sample 全部有对应 + 8 个新增范式）；另立 `samples/dwf-negative/` 放**必须编译不过**的负例 |
 
 ### 已验证的硬事实
 
@@ -49,6 +49,11 @@
   `node verify-goldens.mjs` → **13/13 lowering 黄金逐字节一致**（在 `.spike/zcode-engine/`）。
 - **本移植的端到端**：typed ask 的 schema 由 `ask<T>` 泛型合成（含 JSDoc description 的
   harvest），引擎校验后回 `accept`，journal 落 typed 结果行。
+- **作者面全绿**：`samples/dwf/` 33 个 `.dwf.ts` 全部编译通过；
+  `samples/dwf-negative/` 2 个负例全部**按预期诊断码**失败。
+  一条命令看全部：`node scripts/run-all-checks.mjs`（10 个检查脚本）。
+- **旧路径没被牺牲**：`samples/` 下的 25 个 `.mjs` 与 5 个 `.ts` 一个字节没动，
+  `node scripts/legacy-smoke.mjs` 照常通过。
 - **Electron 兼容**：vendored 的 harness 显式带 `ELECTRON_RUN_AS_NODE: "1"`
   （`harness.ts:292`）——dsh 桌面端是 Electron，这一条是必需的。
   ⚠️ dsh 现有的 `lib/runtime.js:454` **没有**带这个变量，需在接线时核对。
@@ -388,23 +393,60 @@ Copy-Item "$S\lib","$S\public","$S\samples","$S\package.json","$S\cordis.patch.y
 落在同一 state 形状上、四张图非空、**路径逃逸与 symlink 逃逸双双被拒并说明原因**。
 `scripts/legacy-smoke.mjs` 确认旧路径照常工作。两者都在 CI 里跑，离线。
 
-### 阶段 D — dsh 独有 facade 能力 ⬜
+### 阶段 D — dsh 独有 facade 能力 ✅ 已完成
 
 `askUser` / `escalate` / `stages` / `route` / `t` / `concurrency` / `models` / `constants`：
 写进 dsh 自己的 facade 文本（用 `createWorkflowProgram(text, { facadeDts })` 注入），
 并在沙箱 globals 里提供实现。**注意**：ZCode 的 registry 不认识这些成员，
 所以它们不产生站点、不落 journal 行——这是相对旧实现的**语义降级**，需要在文档里说清楚。
 
-### 阶段 E — 模型面工具 + 内置 skill ⬜
+### 阶段 E — 模型面工具 + 内置 skill ✅ 已完成
 
 `CreateWorkflow` / `AmendWorkflow` / `SaveWorkflow` / `EvalWorkflowSnippet` /
 `FillWorkflowHole` / `ListWorkflowRuns` / `GetWorkflowRun` / `ListSavedWorkflows` / `ResolveWorkflowQuestion`
 （`ctx.tools.register`），加改写后的 `dynamic-workflows` skill（`ctx.skills.register`）作硬门禁。
 
-### 阶段 F — 编辑器四图 + samples 迁移 ⬜
+### 阶段 F — 编辑器四图 + samples 迁移 ✅
 
 编辑器渲染 site / causality / control-flow / handoff 四张图；
 现有 30 个 sample 从 `ask(prompt, { result: shape })` 迁到 `ask<T>()`。
+
+**落地情况**（2026-10-20）：
+
+- `public/graph-view.js`（独立模块）：site / control-flow 共用一套节点图渲染器，
+  causality 是表格，handoff 是参与者列表。编辑器加 **Graphs 标签页**接上。
+  `.dwf.ts` 按扩展名分流到引擎路径；sample 路径解析不再丢目录部分。
+- `samples/dwf/*.dwf.ts` **33 个全部编译通过**（`node scripts/dwf-samples-check.mjs`）。
+  25 个旧 `.mjs` sample 每个都有对应文件，另加 8 个新范式
+  （`ask-human` / `env-scrub` / `models-list` / `scan-todos` / `summarize` /
+  `typecheck-ok` / `typed-minimal` / `typed-shapes`）。
+  **旧 `.mjs` 与顶层 `.ts` 全部保留**——老路径仍然可用。
+- `samples/dwf-negative/*.dwf.ts` **2 个负例**：一个打在 TypeScript 层
+  （1184 / 2322 / 2304），一个打在作者规则层（9003 / 9004 / 9005 / 9007 / 9010 / 9012）。
+  「必须编译不过」的文件不能住在 `samples/dwf/`——那目录是整目录编译的，
+  所以另立一个兄弟目录，让这个约定本身可被检查
+  （`node scripts/dwf-negative-check.mjs`：不只断言"编译不过"，
+  还断言"败在预期的诊断码上"，否则一个因为别的原因失败的负例等于什么都没测）。
+
+**迁移过程中编译器真正抓到的旧 sample 毛病**（证明这层不是摆设）：
+
+| 码 | 抓到了什么 |
+|---|---|
+| 9004 | phase 名必须是字面量——旧 sample 里的 `phase(\`Work ${n}\`)`、`phase(\`Summarize "${topic}"\`)` 全是运行期才成形的名字 |
+| 9005 | actor 名在一次 run 内必须唯一——旧 `planner-critic.mjs` 用了两次 `agent('planner')` |
+| 9007 | report 的标签必须指向本脚本声明过的预置看板——旧 sample 里的自由标签（`'echo'` / `'summary'` / `'hits'` …） |
+| 9008 | 预置看板不能在循环/回调里声明——旧 `file-grep.mjs` 在函数体内 `artifact.table('hits', …)` |
+| 9003 | `world.run` 的命令名必须是字面量 | 
+| 9010 | `model()` 的参数必须是已知的模型名（模型集合在运行前闭合） |
+| 9012 | 留白必须写出类型实参 |
+| 9001 | facade 只能直接调用——`const p = phase` 会把调用点洗掉 |
+| 9002 | 数据契约层：`error: s.error` 把 `undefined` 带进了非可选属性 |
+
+**顺带修掉的一个真缺陷**（`lib/dwf/prepare.js`）：`prepareWorkflow` 把 schema
+诊断算进了 `ok`，却**没有把它们带出来**——结果就是"编译不过，但没有任何理由"，
+检查脚本只能看到一个空的 `[FAIL]`。现在 schema 层是第三个诊断层，
+`collectPreparedDiagnostics` 会把它并进去，`/api/engine/compile` 也一并受益。
+回归探针：`node scripts/dwf-schema-diag-check.mjs`。
 
 ---
 

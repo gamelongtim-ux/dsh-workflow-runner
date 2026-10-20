@@ -29,7 +29,12 @@ const review = async (): Promise<{
 }> => {
   // stage 正文里的 phase 会折进这个 run 的 phase pills。
   phase("Injected review");
-  log(`review: this run may use ${models.length} model(s)`);
+
+  // 注入的 stage 与本脚本共享同一份 world.run 允许清单：它跑的命令也要经过确认窗。
+  const probe = await world.run("node", ["-e", "process.stdout.write('injected')"], {
+    timeoutMs: 5000,
+  });
+  log(`review: the stage ran ${probe.stdout.trim()}`);
 
   const priorStages: string[] = [];
   const verdict = {
