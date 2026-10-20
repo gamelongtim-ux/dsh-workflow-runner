@@ -73,6 +73,12 @@ jobs:
       - name: Check: the compile report
         run: node scripts/dwf-compile-check.mjs
 
+      # dsh's own facade members on the engine path: the human question
+      # round-trip, the multi-model routing, the model list, the constants,
+      # the concurrency telemetry and the injected stages.
+      - name: Smoke: dsh facade members on the engine path
+        run: node scripts/dwf-extras-smoke.mjs
+
   syntax-check:
     name: node --check (lib + public + samples)
     runs-on: ubuntu-latest
