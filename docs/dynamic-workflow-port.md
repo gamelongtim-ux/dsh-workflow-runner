@@ -54,6 +54,13 @@
   一条命令看全部：`node scripts/run-all-checks.mjs`（10 个检查脚本）。
 - **旧路径没被牺牲**：`samples/` 下的 25 个 `.mjs` 与 5 个 `.ts` 一个字节没动，
   `node scripts/legacy-smoke.mjs` 照常通过。
+- **插件真的会激活**（v0.15.2/0.15.3 修的两个 bug 都在这条线上）：
+  `scripts/dwf-apply-check.mjs` 用假 cordis ctx 调 `apply()`，
+  断言注册出 10 个 tool、1 个 skill、1 个 `/workflow` 命令、1 张 Settings 卡片、
+  1 条 web 路由，且每个 effect 的 disposer 都能安全调用。
+  `scripts/verify-profile-install.mjs` 对**实际装进 profile 的那份**做同样的事。
+  ⚠️ 这两个 bug 都**在仓库里看不见**——peer 依赖在仓库里解析不到，
+  而仓库里从来没人调用过 `apply()`。**能 import ≠ 能用。**
 - **Electron 兼容**：vendored 的 harness 显式带 `ELECTRON_RUN_AS_NODE: "1"`
   （`harness.ts:292`）——dsh 桌面端是 Electron，这一条是必需的。
   ⚠️ dsh 现有的 `lib/runtime.js:454` **没有**带这个变量，需在接线时核对。
