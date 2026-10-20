@@ -8,6 +8,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.3] — 2026-10-20
+
+`apply()` runs now. It did not.
+
+Inside `apply()`, `const runtime = new WorkflowRuntime({...})` sat *below* the
+block that registers the model-facing tools, and that block reads `runtime`.
+`const` is in its temporal dead zone until its declaration runs, so the read
+was a `ReferenceError` — in every dsh profile, because every dsh profile
+provides `ctx.inject` and `ctx.effect`, which is the condition under which
+that block runs at all. The runtime is built at the top of `apply()` now,
+where it belongs.
+
+Neither this nor the schemastery bug in 0.15.2 was visible from the
+repository: the peer dependency does not resolve there, and nothing in the
+repo ever called `apply()`. A plugin can import perfectly and still be
+entirely inert.
+
+`scripts/dwf-apply-check.mjs` calls `apply()` against a mock cordis context
+and asserts what got registered: 10 tools, the `dynamic-workflows` skill, the
+`/workflow` command, the Settings card, the web route — and that every
+effect returns a disposer that does not throw. `scripts/verify-profile-install.mjs`
+does the same against the copy actually installed in a dsh profile.
+
 ## [0.15.2] — 2026-10-20
 
 The plugin now imports in a real dsh profile. It did not, before.

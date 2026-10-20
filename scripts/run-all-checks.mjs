@@ -22,6 +22,7 @@ const CHECKS = [
   ['dwf-negative-check.mjs', 'negative fixtures refuse'],
   ['dwf-schema-diag-check.mjs', 'schema layer reports'],
   ['dwf-schemastery-check.mjs', 'peer dep: schemastery', ['--import', './scripts/register-schemastery-stub.mjs']],
+  ['dwf-apply-check.mjs', 'the plugin activates', ['--import', './scripts/register-schemastery-stub.mjs']],
   ['check-pack-contents.mjs', 'package contents'],
   ['dwf-plugin-check.mjs', 'plugin entry'],
 ];

@@ -70,6 +70,54 @@ for (const rel of [
   if (!ok) problems.push(`${rel} is missing`);
 }
 
+// The plugin must ACTIVATE, not merely import: apply() is what a dsh
+// profile runs, and it registers the tools, the skill, the command, the
+// Settings card and the web route. Two bugs lived here — a peer-dep API
+// that threw at import, and a `const` read before its declaration — and
+// neither was visible from the repository, where the peer dep does not
+// resolve and apply() was never called.
+const registered = { tools: [], skills: [], commands: [], web: [], sections: [] };
+const mockCtx = {
+  inject: (deps, fn) => {
+    for (const dep of deps) {
+      const service = {
+        register: (def) => {
+          if (dep === 'tools') registered.tools.push(def);
+          else if (dep === 'skills') registered.skills.push(def);
+          else if (dep === 'commands') registered.commands.push(def);
+          return () => {};
+        },
+      };
+      if (dep === 'settings') {
+        service.legacy = {
+          installSection: () => {
+            registered.sections.push({});
+            return () => {};
+          },
+        };
+      }
+      fn({ [dep]: service });
+    }
+  },
+  effect: (fn) => fn(),
+  webServer: { register: (def) => { registered.web.push(def); return () => {}; } },
+  connection: { requestRejection: () => null },
+};
+
+try {
+  plugin.apply(mockCtx, { path: '/workflow' });
+} catch (err) {
+  problems.push(`apply() threw in the profile: ${err && (err.stack || err.message)}`);
+}
+process.stdout.write(
+  `apply() registered  : ${registered.tools.length} tool(s), ${registered.skills.length} skill(s), ` +
+  `${registered.commands.length} command(s), ${registered.web.length} route(s), ${registered.sections.length} section(s)\n`,
+);
+if (registered.tools.length !== 10) problems.push(`apply() registered ${registered.tools.length} tools, expected 10`);
+if (registered.skills.length !== 1) problems.push(`apply() registered ${registered.skills.length} skills, expected 1`);
+if (registered.commands.length !== 1) problems.push(`apply() registered ${registered.commands.length} commands, expected 1`);
+if (registered.web.length !== 1) problems.push(`apply() registered ${registered.web.length} routes, expected 1`);
+
 if (problems.length > 0) {
   process.stdout.write(`\nFAIL:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
