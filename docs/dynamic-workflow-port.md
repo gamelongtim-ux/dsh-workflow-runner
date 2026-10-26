@@ -73,9 +73,25 @@ happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真
 | 能力 | 状态 |
 |---|---|
 | **`ResumeWorkflowRun` tool** | **没有**。上游有。 |
-| **持久化的 engine journal / resume / imported cache** | **没有**。引擎的 journal 是 `InMemoryJournalStore`，只落在内存里。上游的 `imported-cache*.ts` / `engine-resume.ts` / `replay-order.ts` 在本移植里是**死代码**。 |
 | **进程级 AIMD 并发调节** | **没有**。上游的 `ConcurrencyController` vendor 进来了但从未实例化。引擎的固定上限是有的（`max_concurrency` 照常生效），只是不会因为 429 自适应收缩。 |
-| **`askMutating`** | **没有**。它是引擎**唯一**会据以决策的观察（关导入缓存）。导入缓存本身没接，所以暂时无影响；一旦接上就必须补。 |
+| **`askProgress` / `askWaiting` / `askExecuting`** | **没有**。都是观察性的：运行面板因此少了「还在忙」的实时信号。 |
+| **持久化的 engine journal** | **没有**。引擎的 journal 是 `InMemoryJournalStore`，只落在内存里。**resume 只能在同一个 dsh 进程内做**——进程一重启，前驱的 run 就只剩壳了。 |
+
+### H. amend-resume（2026-10-26）
+
+上游的「修订续跑」在本移植里**通了**：新 run 可以继承前一个 run 的**缓存答案**——指令和子代理都没变的 ask 从缓存结算，不再付一次钱；前驱花掉的 token 记为继承，所以一次 run 报的是它整条血缘的成本。
+
+接上的四件事：
+
+| 环节 | 上游契约 | 本移植 |
+|---|---|---|
+| **`messageBoundary`** | driver 拥有。每次交换结束后，driver 把子代理会话的消息数写进 ask 的 node 行（count offset，前缀复制下不变——这正是转录截断的根基） | `lib/dwf/driver.js` 的 `#writeMessageBoundary`。踩过一个坑：ask 的 node 行是**引擎结算时**写的，而结算发生在 driver 上报结果**之后**，所以边界必须在上报之后写，且写不到时下一轮重试 |
+| **导入缓存** | 引擎零 I/O，缓存是调用方从前驱 journal 构建的**纯数据** | `lib/dwf/imported-cache.js` 的 `buildImportedCache`。子代理按**名字**匹配（修订后的脚本可能挪动 `agent(...)` 的位置）；重名和匿名都不导入；preflight 要求每个已完成的 ask 都有 `messageBoundary`，缺一个就整体拒绝（`missing_boundaries`） |
+| **会话种子** | `ActorSessionSeed = { sourceSessionId, messageCount, resolvedModel }`——是**指针和计数**，不是消息本身 | 之前读的是 `seed.messages`（上游根本没有这个字段），所以转录截断其实一直没实现。现在按上游语义实现了复制，并且遵守两条跳过规则：目标已有足够消息（崩溃恢复的情形）、目标持有不是种子克隆的消息（这个会话有了自己的生活） |
+| **缓存关门** | 第一笔写入时关门。`askMutating`（子代理即将执行改写工具）是 driver 唯一的观察，而引擎据以做决策 | dsh 的子代理**没有工具**（只回文本），所以没有工具调用可观察。真正会改工作区的是宿主替 ask 做的事：**stage 的 `world.run`**。它现在走引擎自己的 `worldRead`，所以关门发生在**命令启动之前**，与上游的 `world.run` 规则一致 |
+
+实测：`scripts/dwf-import-cache-check.mjs` —— 前驱跑一次，后继用**同样的指令**跑一次，**模型一次都没被调用**；换指令或换 persona 就 miss；写工作区则关门，且**幂等**（写两次只关一次）。
+
 
 ### 已验证的硬事实
 

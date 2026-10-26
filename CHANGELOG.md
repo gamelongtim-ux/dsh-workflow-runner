@@ -10,6 +10,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Amend-resume: a run can inherit an earlier run's cached answers.**
+
+  `create_workflow` (and `POST /api/engine/run`) now take `resume_from` /
+  `resumeFrom`. The new run inherits the old one's **cached answers**: an
+  ask whose instructions and subagent are unchanged is settled from the
+  cache instead of being paid for again, and the predecessor's tokens are
+  counted as inherited — so a run reports the cost of its whole lineage.
+
+  The cache is about the PREDECESSOR's world, so it closes at the first
+  write. A live `world.run` closes it before the command starts; after
+  that, the asks that touched the workspace run live again, while the ones
+  that only answered are still settled from the cache.
+
+  Three pieces of upstream's contract were implemented:
+
+  - **`messageBoundary`** — the driver-owned field the transcript
+    truncation is built on. After each exchange the driver counts the
+    subagent session's messages and writes that count into the ask's node
+    row. It is a count offset, and count offsets survive a prefix copy —
+    which is what makes the copied transcript's boundary still valid.
+
+  - **The import cache** (`lib/dwf/imported-cache.js`) — pure data built
+    from the predecessor's journal, because the engine keeps zero I/O.
+    Subagents are matched by **name** (a revised script may move the
+    `agent(...)` call); anonymous and duplicated names are skipped; the
+    preflight refuses the whole import if any completed ask lacks a
+    `messageBoundary`, rather than importing half of it.
+
+  - **The session seed** — upstream's `ActorSessionSeed` is
+    `{ sourceSessionId, messageCount, resolvedModel }`: a pointer and a
+    count, not the messages. The port was reading `seed.messages`, a
+    field upstream does not have, so the transcript truncation was never
+    actually implemented. It is now, with upstream's two skip rules.
+
+- `scripts/dwf-import-cache-check.mjs` — drives the whole chain offline:
+  a predecessor, a successor that is a cache hit (the model must NOT be
+  called), misses on different instructions and on a different persona,
+  the close on a write, its idempotence, and a stage's host-side write.
+
 ### Fixed
 
 - **A provider error no longer takes down the dsh host.** This was the
@@ -62,6 +103,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   engine's own scheduler admits asks. So it reported zeros for a run that
   was plainly busy. The driver now counts the engine's asks.
 
+- **A stage's body now receives the facade.** The stage function was
+  called as `(ctx)` while the legacy path calls it `(ctx, __dsh)`, so a
+  stage could not reach `world`, `files` or `git` at all.
+
 - **Two facades no longer drift.** `route` was declared in
   `lib/facade.d.ts` as taking an **array** while every implementation
   takes a **map**; `stages.pending()` was declared synchronous on one
@@ -78,7 +123,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   force-enable form. The profile patch file is hot-reloaded, so this
   takes effect without restarting dsh.
 
-### Added
+### Changed
+
+- **The skill gate now covers every tool that accepts code**, not just
+  `create_workflow`. Upstream gates `CreateWorkflow` / `AmendWorkflow` /
+  `SaveWorkflow` / `EvalWorkflowSnippet`; dsh now gates those plus
+  `fill_workflow_hole` and `amend_workflow`. Gating only one left the
+  others as a way to submit a workflow written without the contract.
+
+- **`save_workflow`'s `scope` is required and has no default**, matching
+  upstream. `global` now really saves to the global directory instead of
+  being coerced to `project`.
+
+- **`create_workflow` takes a `saved` source**, closing the save→run
+  loop: a workflow saved by `save_workflow` can now be run by name.
+  Exactly one of `script`, `path` or `saved` is required.
+
+- **`amend_workflow` takes `max_concurrency`**, so a run that is already
+  going can have its ceiling changed — upstream has this on
+  `AmendWorkflow` for the same reason.
+
+- **`fill_workflow_hole`'s result is awaited** and reports a refusal
+  instead of claiming success for a fill that never happened.
+
+### Added (checks)
 
 - `scripts/dwf-failure-check.mjs` — the engine path's **failure** paths:
   a transient provider error fails the ask without crashing; a
@@ -113,29 +181,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   UInt32 words rather than three, and the old reader failed with a JSON
   parse error on those.
 
-### Changed
-
-- **The skill gate now covers every tool that accepts code**, not just
-  `create_workflow`. Upstream gates `CreateWorkflow` / `AmendWorkflow` /
-  `SaveWorkflow` / `EvalWorkflowSnippet`; dsh now gates those plus
-  `fill_workflow_hole` and `amend_workflow`. Gating only one left the
-  others as a way to submit a workflow written without the contract.
-
-- **`save_workflow`'s `scope` is required and has no default**, matching
-  upstream. `global` now really saves to the global directory instead of
-  being coerced to `project`.
-
-- **`create_workflow` takes a `saved` source**, closing the save→run
-  loop: a workflow saved by `save_workflow` can now be run by name.
-  Exactly one of `script`, `path` or `saved` is required.
-
-- **`amend_workflow` takes `max_concurrency`**, so a run that is already
-  going can have its ceiling changed — upstream has this on
-  `AmendWorkflow` for the same reason.
-
-- **`fill_workflow_hole`'s result is awaited** and reports a refusal
-  instead of claiming success for a fill that never happened.
-
 ### Documentation
 
 - The README's "Out of scope" section claimed the vendored engine was
@@ -152,9 +197,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to be missing.
 
 - `docs/dynamic-workflow-port.md` records what the failure-path work
-  found and fixed, and — just as importantly — what is **still missing**:
-  `ResumeWorkflowRun`, a durable engine journal (so no resume and no
-  imported cache), the process-level AIMD governor, and `askMutating`.
+  found and fixed, what the amend-resume work connected, and what is
+  **still missing**: `ResumeWorkflowRun`, a durable engine journal (so a
+  resume does not survive a dsh restart), the process-level AIMD
+  governor, and the observation-only sink calls.
 
 ## [0.15.3] — 2026-10-20
 

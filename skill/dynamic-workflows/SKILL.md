@@ -183,6 +183,23 @@ The script sees the workspace through a small, read-only door:
 - `world.run` is the only way to change anything, and the run's journal
   records it, so a resumed run does not repeat it.
 
+### Resuming
+
+`create_workflow` takes `resume_from: <run id>`. The new run inherits the
+old one's **cached answers**: an ask whose instructions and subagent are
+unchanged is settled from the cache instead of being paid for again, and
+the old run's tokens are counted as inherited, so a run reports the cost
+of its whole lineage.
+
+The cache is about the OLD run's world, so it closes at the first write —
+a `world.run` closes it before the command starts. After that, the asks
+that touched the workspace run live again; the ones that only answered are
+still settled from the cache.
+
+Resume when the script is mostly the same and you are changing a little.
+Do not resume when the workspace has moved on: the cache would be an
+answer about a world that no longer exists.
+
 ## 8. Concurrency
 
 `channel` and `future` are the pipeline primitives.
