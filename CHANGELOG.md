@@ -8,6 +8,83 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [Unreleased]
+
+### Fixed
+
+- The plugin was installed but **never activated**, in any profile whose
+  `cordis.patch.yml` carried a `disabled: true` row for it. The symptom was
+  a silent 404 on `/workflow/` with no warning anywhere.
+
+  The cause was in the profile's patch file, not in this package. dsh's
+  patch algorithm (`applyEntryPatches`, in `@deepseek-ai/cordis-plugin-include`)
+  applies patches **in file order** and indexes an inserted row **immediately**
+  — so this file:
+
+  ```yaml
+  - insert:
+      - id: dsh-workflow-runner
+        name: dsh-workflow-runner
+        config: { path: /workflow }
+  - id: dsh-workflow-runner
+    disabled: true
+  ```
+
+  creates the row and then disables it, in the same pass. There is no
+  precedence rule that lets the insert win; only the order matters. dsh's
+  startup audit skips disabled rows, so a plugin disabled this way produces
+  **no diagnostic at all**.
+
+  The fix is the row itself — `disabled: false` is dsh's documented
+  force-enable form:
+
+  ```yaml
+  - id: dsh-workflow-runner
+    disabled: false
+  ```
+
+  The profile patch file is hot-reloaded, so this takes effect without
+  restarting dsh. This entry documents the cause; it is not a code change in
+  the package.
+
+  `scripts/patch-sim.mjs` replays dsh's own patch algorithm against a
+  profile and prints the composed rows plus a verdict, so the state can be
+  checked without guessing.
+
+### Added
+
+- `scripts/dwf-port-coverage.mjs` — checks that all four upstream engine
+  ports are still implemented, and that every method of `WorkflowDriver`
+  (the one port dsh owns) exists in `lib/dwf/driver.js`. Wired into
+  `node scripts/run-all-checks.mjs`.
+
+  The check encodes who implements what, which is not obvious from the
+  port list alone: upstream's `WorkflowEngine` implements `WorkflowHostApi`
+  and `WorkflowReportSink`, upstream's `InMemoryJournalStore` implements
+  `JournalStorePort` (dsh wraps it with a write-through layer), and dsh
+  implements only `WorkflowDriver`.
+
+- `scripts/asar-read.mjs` now locates the asar header JSON instead of
+  assuming it starts at byte 12. Some asar builds frame it with four
+  UInt32 words rather than three, and the old reader failed with a JSON
+  parse error on those.
+
+### Documentation
+
+- The README's "Out of scope" section claimed the vendored engine was **not
+  wired to dsh's runtime** and that the user-facing path was still the
+  pre-v0.13 one. That was stale: the engine path has been live since
+  v0.13.0, and it is the path the **model** uses (`create_workflow` and the
+  other model-facing tools always compile before they run).
+
+  Both READMEs now describe the two run paths side by side — engine path
+  (`.dwf.ts`, compiled, four graphs, `ask<T>()`) and legacy path (`.mjs` /
+  `.ts`, typechecked only) — and state which one the model uses.
+
+- The troubleshooting section now leads with the `disabled: true` case,
+  because it is silent and it is the most common reason the plugin appears
+  to be missing.
+
 ## [0.15.3] — 2026-10-20
 
 `apply()` runs now. It did not.

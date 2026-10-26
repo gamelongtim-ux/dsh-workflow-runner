@@ -23,16 +23,24 @@ function openAsar(asarPath) {
   //   4-7   UInt32  size of the header pickle
   //   8-11  UInt32  size of the header JSON string
   //   12..  the header JSON
-  const head = Buffer.alloc(12);
-  readSync(fd, head, 0, 12, 0);
-  const headerPickleSize = head.readUInt32LE(4);
-  const headerStringSize = head.readUInt32LE(8);
+  //
+  // The number of UInt32 framing words before the JSON differs between
+  // asar builds (some have three, some four), so the JSON's real start is
+  // found by looking for it rather than assumed. The UInt32 immediately
+  // before it is the JSON string's length.
+  const head = Buffer.alloc(64);
+  readSync(fd, head, 0, 64, 0);
+  const jsonAt = head.indexOf('{"files"');
+  if (jsonAt < 4) {
+    throw new Error('asar header: could not locate the JSON directory');
+  }
+  const headerStringSize = head.readUInt32LE(jsonAt - 4);
   const headerBuf = Buffer.alloc(headerStringSize);
-  // The header string is padded to a 4-byte boundary inside the pickle.
-  const padding = (4 - (headerStringSize % 4)) % 4;
-  readSync(fd, headerBuf, 0, headerStringSize, 12 + padding);
+  readSync(fd, headerBuf, 0, headerStringSize, jsonAt);
   const header = JSON.parse(headerBuf.toString('utf8'));
-  const base = 8 + headerPickleSize;
+  // The blob starts right after the whole header pickle, whose size is the
+  // UInt32 at offset 4.
+  const base = 8 + head.readUInt32LE(4);
   const files = new Map();
 
   const walk = (node, prefix) => {

@@ -682,6 +682,55 @@ LLM 子代理直接打 DeepSeek `/v1/chat/completions`,优先通过 `ctx.llm.res
         config: { path: /workflow }
   ```
 
+## 两条运行路径
+
+工作流跑在哪条路上,看**文件扩展名**,不是看设置。
+
+| | **引擎路径**(`.dwf.ts`) | **旧路径**(`.mjs`、`.ts`) |
+|---|---|---|
+| 谁执行 | vendor 进来的 ZCode `@zcode/dynamic-workflow` 引擎,进程内 | 独立 Node 子进程,JSON-RPC over stdio |
+| 执行之前 | **先编译**:静态分析、降级成带 site id 的 JS、`ask<T>` 合成 JSON Schema | 只做类型检查(`tsc --noEmit --strict`) |
+| 诊断 | 带稳定错误码的编译期诊断(9001–9012、2322 …) | 只有 TypeScript 报错 |
+| 四张图 | 有 —— site / causality / control-flow / hand-off | 无 |
+| 带类型的 ask | `ask<T>()` —— 类型实参**就是**契约 | `ask(prompt, { result: shape })` |
+| 编辑器 | **Graphs** 标签页渲染四张图 | — |
+
+两条路径共用同一份 run state 形状、同一套 phase 折叠、同一套 report 路由、同一套沙箱、
+同一套产物和同一份 journal。
+
+**模型走的是引擎路径**:`create_workflow` 等模型面工具一律走引擎路径。模型写出来的工作流
+一定先编译再跑;编译不过的脚本是被报告出来,而不是被跑起来。
+
+### 引擎路径端到端
+
+```bash
+# 只编译 —— 诊断、四张图、每个 ask 的 schema、降级体
+curl -X POST http://127.0.0.1:54912/workflow/api/engine/compile \
+  -H 'content-type: application/json' \
+  -d '{"scriptText":"phase(\"plan\");\nconst x = await agent(\"a\").ask<string>(\"hi\");\nreturn {x};"}'
+
+# 编译并运行
+curl -X POST http://127.0.0.1:54912/workflow/api/engine/run \
+  -H 'content-type: application/json' \
+  -d '{"scriptText":"..."}'
+```
+
+上面那个 `ask<string>()` 不是装饰:引擎从类型实参合成出 `{"type":"string"}`,把 schema
+交给模型,再拿它校验答案。
+
+### 关于上游引擎
+
+引擎是**原样 vendor** 进来的 —— `npm run verify:vendor` 会逐字节核对上游清单(458 + 26 个文件)。
+唯一的适配在 `lib/dwf/`:dsh 的 LLM、沙箱和产物仓库通过上游的四个端口注入
+(`WorkflowHostApi`、`WorkflowDriver`、`JournalStorePort`、`WorkflowReportSink`)。
+
+dsh 自己的 facade 扩展 —— `askUser`、`escalate`、`route`、`t`、`concurrency.stat`、
+`stages`、`models`、`constants` —— 声明在 `lib/dwf/dsh-facade.js`,实现为 sandbox 全局。
+它们不在引擎的 registry 里,所以不产生 site、也不落 journal 行:这是有记录的语义差异,
+不是疏漏。
+
+完整移植分析见 `docs/dynamic-workflow-port.md`。
+
 ## 显式不做
 
 - TypeScript 类型检查 —— 只用 JS + JSDoc(v0.6.0 加了 `t` + `shape()` 让 shape 写起来更顺,真要编译期类型检查得加 build 步骤。v0.7.0 想加 `tsc` 编译 `.ts` 路径,撞了 V8 parser 的 forward ref 检查,回退;v0.7.1 换种姿势再来)

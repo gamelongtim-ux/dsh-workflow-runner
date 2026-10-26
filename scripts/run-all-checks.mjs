@@ -16,6 +16,7 @@ const CHECKS = [
   ['dwf-runtime-smoke.mjs', 'runtime layer'],
   ['legacy-smoke.mjs', 'legacy path regression'],
   ['dwf-compile-check.mjs', 'compile API'],
+  ['dwf-port-coverage.mjs', 'engine ports covered'],
   ['dwf-extras-smoke.mjs', 'extras'],
   ['dwf-tools-smoke.mjs', 'model-facing tools'],
   ['dwf-samples-check.mjs', 'samples compile'],

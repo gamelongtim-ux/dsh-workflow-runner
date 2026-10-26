@@ -750,6 +750,53 @@ dependencies.
 
 ### `▶ Workflow` button does not appear after install
 
+**First check this one — it is the most common cause and it is silent.**
+
+Look at `~/.dsh/profiles/desktop/cordis.patch.yml`. If it contains a row
+
+```yaml
+- id: dsh-workflow-runner
+  disabled: true
+```
+
+the plugin is **disabled**: dsh's Loader never imports it, so `/workflow/`
+returns **404** and the button never appears. There is no warning — dsh's
+startup audit skips disabled rows, so a disabled plugin fails completely
+silently.
+
+Fix it by flipping that row to `disabled: false` (dsh's documented
+force-enable form), or deleting the row entirely:
+
+```yaml
+- id: dsh-workflow-runner
+  disabled: false
+```
+
+The patch file is hot-reloaded, so this takes effect **without restarting
+dsh**.
+
+To check what the profile actually composes to, from a checkout of this
+repository:
+
+```bash
+node scripts/patch-sim.mjs ~/.dsh/profiles/desktop
+```
+
+It replays dsh's own patch algorithm against the profile and prints the
+composed rows plus a verdict. (The published tarball ships `lib/`, `public/`,
+`samples/`, `packages/` and `skill/` — not `scripts/` — so this helper is
+for maintainers working from a clone.)
+
+> **Why this is easy to hit.** The plugin's own bundle patch
+> (`cordis.patch.yml` inside the package) is a bare `insert:`. The profile's
+> user layer is what actually creates the row. So if a profile patch adds a
+> `disabled: true` row for the same id — which is what dsh's plugin
+> marketplace writes when you turn a plugin **off** — it disables the row
+> that insert created, because dsh applies patches in file order and an
+> inserted row is indexed immediately.
+
+---
+
 Fixed in **v0.1.5**. The cause was a stray `lib/package.json` inside the
 package: dsh's `dsh.client` scan walks up from the resolved entry
 (`lib/plugin.js`) to the nearest manifest, found that shadow file, and computed
@@ -845,17 +892,66 @@ Two ways out:
 
 ## Out of scope (deliberate)
 
-- The vendored ZCode Dynamic Workflow engine is **not yet wired to dsh's
-  runtime**. v0.13.0 lands the engine, the harness and the adapter
-  (`lib/dwf/`), and proves the whole chain runs to settlement — but the
-  plugin's user-facing path is still the pre-v0.13 one: a `.mjs` / `.ts`
-  script behind the original facade. The next stage connects dsh's LLM,
-  sandbox and artifact store to the engine. See
-  `docs/dynamic-workflow-port.md` for the stage plan.
 - Plugin configuration card **now exists** (v0.7.0) but only when
   `@deepseek-ai/schemastery` resolves in the dsh profile — see
   CHANGELOG. The card itself is a thin link to the workflow editor;
   the actual per-run knobs live in the editor.
+
+## Two run paths
+
+A workflow runs on one of two paths. Which one is chosen is by **file
+extension**, not by a setting.
+
+| | **Engine path** (`.dwf.ts`) | **Legacy path** (`.mjs`, `.ts`) |
+|---|---|---|
+| What runs it | ZCode's vendored `@zcode/dynamic-workflow` engine, in-process | a Node child process, JSON-RPC over stdio |
+| Before it runs | **compiled**: statically analysed, lowered to site-tagged JS, `ask<T>` synthesised into a JSON Schema | typechecked only (`tsc --noEmit --strict`) |
+| Diagnostics | compiler diagnostics with stable codes (9001–9012, 2322, …) | TypeScript errors only |
+| Four graphs | yes — site / causality / control-flow / hand-off | no |
+| Typed asks | `ask<T>()` — the type argument *is* the contract | `ask(prompt, { result: shape })` |
+| Editor | **Graphs** tab renders all four | — |
+
+Both paths share the same run-state shape, the same phase folding, the same
+report routing, the same sandbox, the same artifacts and the same journal.
+
+The engine path is the one the **model** uses: `create_workflow` and the
+other model-facing tools always go through it, so a workflow the model
+writes is always compiled before it runs, and a script that does not
+compile is reported instead of run.
+
+### The engine path, end to end
+
+```bash
+# compile only — diagnostics, four graphs, per-ask schemas, lowered body
+curl -X POST http://127.0.0.1:54912/workflow/api/engine/compile \
+  -H 'content-type: application/json' \
+  -d '{"scriptText":"phase(\"plan\");\nconst x = await agent(\"a\").ask<string>(\"hi\");\nreturn {x};"}'
+
+# compile and run
+curl -X POST http://127.0.0.1:54912/workflow/api/engine/run \
+  -H 'content-type: application/json' \
+  -d '{"scriptText":"..."}'
+```
+
+`ask<string>()` above is not decoration: the engine synthesises
+`{"type":"string"}` from the type argument, hands the schema to the model,
+and validates the answer against it.
+
+### A note on the upstream engine
+
+The engine is vendored **unmodified** — `npm run verify:vendor` checks it
+against the upstream manifest byte for byte (458 + 26 files). The one
+adaptation is in `lib/dwf/`: dsh's LLM, sandbox and artifact store are
+injected through the four upstream ports (`WorkflowHostApi`,
+`WorkflowDriver`, `JournalStorePort`, `WorkflowReportSink`).
+
+dsh's own facade additions — `askUser`, `escalate`, `route`, `t`,
+`concurrency.stat`, `stages`, `models`, `constants` — are declared in
+`lib/dwf/dsh-facade.js` and implemented as sandbox globals. They are not
+in the engine's registries, so they produce no site and no journal row:
+that is a documented semantic difference from ZCode, not an oversight.
+
+See `docs/dynamic-workflow-port.md` for the full port analysis.
 
 ## License
 
