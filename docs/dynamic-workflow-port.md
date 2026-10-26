@@ -75,7 +75,6 @@ happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真
 | **`ResumeWorkflowRun` tool** | **没有**。上游有。 |
 | **进程级 AIMD 并发调节** | **没有**。上游的 `ConcurrencyController` vendor 进来了但从未实例化。引擎的固定上限是有的（`max_concurrency` 照常生效），只是不会因为 429 自适应收缩。 |
 | **`askProgress` / `askWaiting` / `askExecuting`** | **没有**。都是观察性的：运行面板因此少了「还在忙」的实时信号。 |
-| **持久化的 engine journal** | **没有**。引擎的 journal 是 `InMemoryJournalStore`，只落在内存里。**resume 只能在同一个 dsh 进程内做**——进程一重启，前驱的 run 就只剩壳了。 |
 
 ### H. amend-resume（2026-10-26）
 
@@ -92,6 +91,19 @@ happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真
 
 实测：`scripts/dwf-import-cache-check.mjs` —— 前驱跑一次，后继用**同样的指令**跑一次，**模型一次都没被调用**；换指令或换 persona 就 miss；写工作区则关门，且**幂等**（写两次只关一次）。
 
+### I. 持久化的 journal（2026-10-26）
+
+引擎的 journal 是**真相源**：replay、resume、amend-resume 的导入缓存全靠它。原先它只在内存里（`InMemoryJournalStore`），所以 **dsh 一重启，一切都没了**——前驱的缓存答案读不回来，resume 只能在同一个进程内做。
+
+上游为这件事准备了两样东西，本移植现在都用上了：
+
+1. **一份契约套件**。`packages/dynamic-workflow/src/testing/journal-contract.ts` 是 `JournalStorePort` 的契约测试（**83 个用例**），vendor 进来的理由就写在 vendored 的 `tsconfig.runtime.json` 里：*"it is meant to be run against OUR journal implementation"*。本移植实现了 `lib/dwf/durable-journal.js`，**83/83 全过**。
+
+2. **持久化**。`DurableJournalStore` 是上游 `InMemoryJournalStore` 的一层包装——所以**每一条语义都是上游的**——再加一次 write-through 到每个 run 一个 JSON 文件。选 JSON 而不是 SQLite：插件除 `typescript` 外零三方运行时依赖，`node:sqlite` 在 dsh 的 Electron 运行时里不一定可用。
+
+**写放大是被测量过的，不是猜的**：write-through 每次都重写整个 run，直接写就是平方级——实测 501 次写、155 KB 的文件，**总写入约 38 MB**。现在 write-through 是**去抖**的（250ms），实测 500 次写只产生 **1 次**整文件写。run 结束时会立即 flush（后继要读它），进程退出时也会 flush（`exit` / `SIGINT` / `SIGTERM`）。
+
+实测：`scripts/dwf-restart-resume-check.mjs` —— 前驱在**第一个进程**跑完，**第二个进程**（同一个 persist 目录）读回前驱并继承缓存，**模型一次都没被调用**。
 
 ### 已验证的硬事实
 

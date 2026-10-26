@@ -25,19 +25,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that, the asks that touched the workspace run live again, while the ones
   that only answered are still settled from the cache.
 
-  Three pieces of upstream's contract were implemented:
+  Three pieces of upstream's contract were implemented, and one of them
+  was misread:
 
   - **`messageBoundary`** — the driver-owned field the transcript
     truncation is built on. After each exchange the driver counts the
     subagent session's messages and writes that count into the ask's node
     row. It is a count offset, and count offsets survive a prefix copy —
-    which is what makes the copied transcript's boundary still valid.
+    which is what makes the copied transcript's boundary still valid. The
+    write happens AFTER the outcome is reported, because the engine writes
+    the ask's row when it settles, which is the call the driver just made.
 
   - **The import cache** (`lib/dwf/imported-cache.js`) — pure data built
     from the predecessor's journal, because the engine keeps zero I/O.
     Subagents are matched by **name** (a revised script may move the
-    `agent(...)` call); anonymous and duplicated names are skipped; the
-    preflight refuses the whole import if any completed ask lacks a
+    `agent(...)` call); anonymous and duplicated names are skipped; and
+    the preflight refuses the whole import if any completed ask lacks a
     `messageBoundary`, rather than importing half of it.
 
   - **The session seed** — upstream's `ActorSessionSeed` is
@@ -50,6 +53,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a predecessor, a successor that is a cache hit (the model must NOT be
   called), misses on different instructions and on a different persona,
   the close on a write, its idempotence, and a stage's host-side write.
+
+- **The engine's journal is now durable.** The engine's journal is the
+  truth for replay, resume and the amend-resume import cache. It only
+  lived in memory, so a dsh restart lost all of it — a predecessor's
+  cached answers became unreadable, and a resume only worked inside one
+  process.
+
+  `lib/dwf/durable-journal.js` adds `DurableJournalStore`: upstream's
+  `InMemoryJournalStore` wrapped with a write-through to a JSON file per
+  run. Every semantic is upstream's, because every semantic IS upstream's
+  — the wrapper only adds persistence.
+
+  **It passes upstream's own contract suite.** The vendored
+  `packages/dynamic-workflow/src/testing/journal-contract.ts` is the
+  `JournalStorePort` contract test (83 cases), and it is vendored for
+  exactly this purpose — the vendored `tsconfig.runtime.json` says: "it
+  is meant to be run against OUR journal implementation". 83/83 pass.
+
+  A JSON file rather than SQLite: the plugin has zero third-party
+  runtime dependencies beyond `typescript`, and `node:sqlite` may not be
+  exposed by dsh's Electron runtime.
+
+- **The write-through is debounced.** The wrapper rewrites the WHOLE
+  run's rows, so flushing on every put is quadratic. Measured before the
+  debounce: 501 writes of a 155 KB file wrote **~38 MB**. Now the
+  write-through coalesces over 250 ms — 500 writes produce **1**
+  whole-file write. A run flushes immediately when it ends (a successor
+  must read it), and the store flushes on `exit` / `SIGINT` / `SIGTERM`.
+
+- `scripts/dwf-journal-contract-check.mjs` — compiles the vendored
+  engine together with upstream's contract suite, runs the suite against
+  dsh's durable journal, and checks that rows written by one store are
+  read back by a new store over the same directory.
+
+- `scripts/dwf-restart-resume-check.mjs` — drives a predecessor in one
+  runtime, then a SECOND runtime over the same persist directory, and
+  checks that the successor still gets its answer from the restored
+  cache — with the model not called.
 
 ### Fixed
 
@@ -197,10 +238,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to be missing.
 
 - `docs/dynamic-workflow-port.md` records what the failure-path work
-  found and fixed, what the amend-resume work connected, and what is
-  **still missing**: `ResumeWorkflowRun`, a durable engine journal (so a
-  resume does not survive a dsh restart), the process-level AIMD
-  governor, and the observation-only sink calls.
+  found and fixed, what the amend-resume work connected, what the
+  durable-journal work connected, and what is **still missing**:
+  `ResumeWorkflowRun`, the process-level AIMD governor, and the
+  observation-only sink calls.
 
 ## [0.15.3] — 2026-10-20
 

@@ -22,6 +22,8 @@ const CHECKS = [
   ['dwf-hole-fill-check.mjs', 'engine hole fill'],
   ['dwf-stage-check.mjs', 'engine structural amend'],
   ['dwf-import-cache-check.mjs', 'engine amend-resume cache'],
+  ['dwf-restart-resume-check.mjs', 'resume survives a restart'],
+  ['dwf-journal-contract-check.mjs', 'journal: upstream contract'],
   ['dwf-extras-smoke.mjs', 'extras'],
   ['dwf-tools-smoke.mjs', 'model-facing tools'],
   ['dwf-samples-check.mjs', 'samples compile'],
