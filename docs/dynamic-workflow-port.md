@@ -9,12 +9,19 @@
 
 ## 0. 结论速览
 
+> ⚠️ **本节写于移植开始时（2026-10-20），第 2、3 条已经过时。**
+> 移植的进度见 §0b。简要说：**编译期语义已经移植了**（四张图、lowering、
+> site id、泛型 schema 合成都在），**模型面工具也已经注册了**（10 个 tool +
+> 一个 skill）。下面保留原文，因为 §8 的证据链仍然有效——但请把第 2、3 条
+> 读成「当时的状态」。
+
 1. **两边是完全不同的产品。** ZCode = `zai-org/ZCode`（智谱，AI 编程工作台）；dsh =
    `deepseek-ai/deepseek-harness`（DeepSeek Harness）。没有可复用的宿主代码。
-2. **本仓库 v0.12.0 已经移植了 ZCode 的「运行时语义」，但没有移植「编译期语义」。**
-   静态分析、四张图、lowering、site id、泛型 schema 合成、内置 skill、模型面工具——**全部为零**。
-3. **模型目前什么都做不了。** 插件只暴露 HTTP API + web editor，**没有向模型注册任何 tool**。
-   模型是旁观者，不是参与者。这是当前最大的产品级缺口。
+2. ~~**本仓库 v0.12.0 已经移植了 ZCode 的「运行时语义」，但没有移植「编译期语义」。**
+   静态分析、四张图、lowering、site id、泛型 schema 合成、内置 skill、模型面工具——**全部为零**。~~
+   → **已过时**：编译期语义与模型面都已落地（§0b 的 B/E/F 行）。
+3. ~~**模型目前什么都做不了。** 插件只暴露 HTTP API + web editor，**没有向模型注册任何 tool**。~~
+   → **已过时**：10 个 tool + 一个 skill 已注册到宿主（§0b 的 E 行）。
 4. **移植在技术上完全可行，已实测到端到端。** ZCode 引擎源码**零修改**即可构建运行，
    四张图、site id 注入、`ask<T>` → JSON Schema 全部真实产出（§8 V1）。
 5. **dsh 侧能携带 `typescript` 运行时依赖**，无体积上限、无 asar 问题、无供应链策略阻拦（§8 V2）。
@@ -25,21 +32,50 @@
 
 ---
 
-## 0b. 当前进度（2026-10-20）
+## 0b. 当前进度（2026-10-26）
 
 | 阶段 | 状态 | 说明 |
 |---|---|---|
 | **A. vendor + 构建流水线** | ✅ 完成 | 两个上游包进仓；`npm run build` 出 dist；`npm run verify:vendor` 校验字节一致；CI 建包 + 校验 + 冒烟 |
-| **B. 适配层（编译期 + 引擎驱动）** | ✅ 完成 | `lib/dwf/`：`prepare.js`（四图 + lowering + schema）、`driver.js`（WorkflowDriver 四个端口）、`index.js`（`runDwfWorkflow`）、`host.js`（dsh 侧服务 + 事件翻译） |
+| **B. 适配层（编译期 + 引擎驱动）** | ✅ 完成 | `lib/dwf/`：`prepare.js`（四图 + lowering + schema）、`driver.js`（**实现 `WorkflowDriver` 这一个端口**）、`index.js`（`runDwfWorkflow`）、`host.js`（dsh 侧服务 + 事件翻译）。另三个端口由上游实现：`WorkflowHostApi` + `WorkflowReportSink` 是 `WorkflowEngine` 自己，`JournalStorePort` 是 `InMemoryJournalStore`（dsh 加了一层 write-through 包装）。`scripts/dwf-port-coverage.mjs` 钉住这个分工 |
 | **端到端验证** | ✅ PASS | `scripts/dwf-smoke.mjs`：编译 → 分析 → 降级 → 子进程 vm → NDJSON 桥 → 引擎结算 `completed` |
 | **C. 接入 dsh 现有 runtime** | ✅ 完成 | `lib/runtime.js` 的 `startEngine()`；run state 抽成 `#newState`（两条路径共用）；phase/report 抽成 `#enterPhase`/`#recordReport`；`stop()` 支持 abort 引擎 run；`ctx.llm` 的模型调用做成可注入 |
 | **C 的验收** | ✅ PASS | `scripts/dwf-runtime-smoke.mjs`：run 完成、产物正确、phase/agent/report/journal 落在同一 state 形状上、四张图非空、**路径逃逸与 symlink 逃逸双双被拒且给出原因** |
 | **C 顺带修掉的三个缺陷** | ✅ | ① 相对路径按 `process.cwd()` 解析（应按工作区根）② 围栏纯词法判断，symlink 可逃逸 ③ `#runGit` 把**未洗白的 host env** 给了 git 子进程（API key 泄漏） |
 | **C+. 接进 dsh 的 HTTP API** | ✅ 完成 | `POST /api/engine/compile`（只编译，出诊断 + 四张图 + 站点表 + 降级体）与 `POST /api/engine/run`（跑）；`/api/state` 带上 `engine` 段（诊断 + 图 + 结算） |
 | **旧路径回归** | ✅ PASS | `scripts/legacy-smoke.mjs`：子进程路径照常工作 |
-| **D. dsh 独有 facade 能力** | ✅ 完成 | `askUser`/`escalate`/`route`/`models`/`concurrency.stat`/`stages`/`constants` 全部在引擎路径上可用；**上游一个字节未改**（声明进 facade，实现作为 sandbox 全局注入，宿主往返走 worldRead 通道） |
-| **E. 模型面工具 + 内置 skill** | ✅ 完成 | 10 个 tool 注册到宿主 `tools` 服务；`skill/dynamic-workflows/SKILL.md` 注册到 `skills` 服务；**硬门禁**：`create_workflow` 在模型读过契约前拒绝执行 |
+| **D. dsh 独有 facade 能力** | ✅ 完成 | `askUser`/`escalate`/`route`/`models`/`concurrency.stat`/`stages`/`constants` 在引擎路径上可用；**上游一个字节未改**（声明进 facade，实现作为 sandbox 全局注入，宿主往返走 worldRead 通道）。其中 `stages` 与 `concurrency.stat` 是在 2026-10-26 补齐的（见下） |
+| **E. 模型面工具 + 内置 skill** | ✅ 完成 | 10 个 tool 注册到宿主 `tools` 服务；`skill/dynamic-workflows/SKILL.md` 注册到 `skills` 服务；**硬门禁**覆盖**所有接受脚本的 tool**（`create_workflow` / `save_workflow` / `eval_workflow_snippet` / `fill_workflow_hole` / `amend_workflow`） |
 | **F. 编辑器四图 + samples 迁移** | ✅ 完成 | 编辑器加 **Graphs 标签页**，`public/graph-view.js` 渲染 site / causality / control-flow / handoff 四张图；**33 个 `samples/dwf/*.dwf.ts`** 全部编译通过（25 个旧 `.mjs` sample 全部有对应 + 8 个新增范式）；另立 `samples/dwf-negative/` 放**必须编译不过**的负例 |
+| **G. 失败路径**（2026-10-26 新增） | ✅ 完成 | 引擎路径此前只跑过 happy path，失败路径上有真缺陷。见下 |
+
+### G. 失败路径（2026-10-26）
+
+happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真缺陷，都已修掉并加了**对抗性**回归检查（不是又一条 happy-path 检查）：
+
+| 缺陷 | 后果 | 修复 | 回归检查 |
+|---|---|---|---|
+| **provider 报错崩掉整个 dsh 进程** | `driver.js` 给 `sink.askFailed` 传了一个普通对象，而引擎要 `error.toJSON()` → `TypeError` → 未捕获异常 → **宿主进程退出**。因为模型自己的 `create_workflow` 走的就是这条路，**模型能靠一个坏工作流把 dsh 弄崩** | 包成 `WorkflowError`；并把**确定性**的 provider 错误（401/403/402/404/429）映射成上游的 `ProviderStop`，让 run 以 `stopped(provider)` 停下而不是让一个 ask 失败 | `scripts/dwf-failure-check.mjs` |
+| **引擎的控制面从未绑定** | `runtime.js` 的 `#engineRun` 解构 plan 时**漏了 `control`**，引擎句柄永远拿不到。后果：`fill_workflow_hole` 是死的，live run 的并发上限改不了 | plan 里带上 `control` | 同上 |
+| **`fill_workflow_hole` 在引擎路径上不工作** | 上游的契约不是「回答这个洞」，而是「这个 run 的**有效脚本**现在是这段文本」——`fillHole` 要的是 `HoleFill`（重编译后的脚本 + 它的 spec 表 + 阶段表），不是 `(holeId, body)` | 补全时把 body **拼回源码**、**重新编译**、再把新的有效脚本交给引擎；编译不过就拒绝，不让引擎拿到一份不存在的脚本 | `scripts/dwf-hole-fill-check.mjs` |
+| **`stages`（结构化 amend）在引擎路径上不存在** | `injectStage` 要求 `s.child`，而引擎路径没有子进程 → 抛 "run child has already exited" → `stages.list()` 永远是空的，`amend_workflow` 永远失败 | 引擎路径上 stage **停在宿主侧**，脚本用 `stages.run(stageId)` 取走；`stages.await({ forStage: true })` 让脚本等 stage **到达**（不是等它 settle——那会和脚本互相等待，死锁） | `scripts/dwf-stage-check.mjs` |
+
+顺带修掉的：
+
+- **`concurrency.stat()` 在引擎路径上读的是没人在用的信号量**，所以永远是全零。引擎路径的并发上限由引擎自己的 scheduler 执行（`scheduler.ts`），dsh 的信号量根本没被 acquire 过。现在 driver 记真实的 ask 计数（`peak` / `totalAcquired`）。
+- **两个 facade 漂移**：`route` 在 `lib/facade.d.ts` 里声明成收**数组**，而所有实现收的是**映射**；`stages.pending()` 在一边是同步、一边是 Promise。`scripts/dwf-facade-drift-check.mjs` 现在盯着这件事。
+- **tool 契约**：`scope` 之前是可选的（上游是**必填无默认**），现在必填且 `global` 真的会写到全局目录；`create_workflow` 多了 `saved`（上游的第三个来源，之前**保存了却没法按名字再跑**）；门禁从 1 个 tool 扩到**所有接受脚本的 tool**。
+
+> **`t` builder 在引擎路径上没有。** 它是运行期给 `opts.result` 用的糖，而引擎路径的 `ask` 收的是**类型实参**（`ask<T>()`），没有 `opts.result` 这条路。类型层的 `t` 也试过：原始类型能过，泛型过不了，而且 schema 合成不稳定。它留在旧路径上，是有意的。
+
+### 仍然没有的（2026-10-26 核对过，不是忘了）
+
+| 能力 | 状态 |
+|---|---|
+| **`ResumeWorkflowRun` tool** | **没有**。上游有。 |
+| **持久化的 engine journal / resume / imported cache** | **没有**。引擎的 journal 是 `InMemoryJournalStore`，只落在内存里。上游的 `imported-cache*.ts` / `engine-resume.ts` / `replay-order.ts` 在本移植里是**死代码**。 |
+| **进程级 AIMD 并发调节** | **没有**。上游的 `ConcurrencyController` vendor 进来了但从未实例化。引擎的固定上限是有的（`max_concurrency` 照常生效），只是不会因为 429 自适应收缩。 |
+| **`askMutating`** | **没有**。它是引擎**唯一**会据以决策的观察（关导入缓存）。导入缓存本身没接，所以暂时无影响；一旦接上就必须补。 |
 
 ### 已验证的硬事实
 
@@ -107,7 +143,7 @@
 | 静态分析四张图 | ❌ 无。`lib/` 全量 grep `site\|causality\|handoff\|lowering\|mermaid\|graph` 仅 7 处**无关**命中 | `lib/runtime.js:981`、`:72`、`:1176` |
 | `ask<T>` 泛型 → JSON Schema | ❌ 无。`T` 是类型层 fiction，运行时被擦除；真实 schema 来自 `opts.result` 的**运行时字面量**，再拼成提示词文本塞给模型 | `lib/facade.d.ts:172`、`lib/runtime.js:2665`、`:1749-1751` |
 | facade `.d.ts` 单一事实源 | ⚠️ 手写镜像。注释自称「Mirrors the ZCode dynamic-workflows §16.2 contract」，但**无 vendored 源、无同步机制** | `lib/facade.d.ts:3`、`CHANGELOG.md:434` |
-| `CreateWorkflow` / `AmendWorkflow` / `SaveWorkflow` / `EvalWorkflowSnippet` 等 10 个 tool | ❌ **零个 tool**。同名语义只以 HTTP 端点存在 | `lib/plugin.js:422`、`:710`、`:609` |
+| `CreateWorkflow` / `AmendWorkflow` / `SaveWorkflow` / `EvalWorkflowSnippet` 等 10 个 tool | ✅ **10 个 tool 已注册**（`lib/dwf/tools.js` → `ctx.tools.register`）。同名语义既以 HTTP 端点存在，也以模型面 tool 存在。仍有差距：`ResumeWorkflowRun` 缺失，`AmendWorkflow` 被**结构化 stage 注入**取代（有意为之），`FillWorkflowHole` 曾是坏的（2026-10-26 修好） | `lib/dwf/tools.js:104`、`:166`、`:216`、`:353` |
 | bundled skill 硬门禁 | ❌ 无 skill 目录（全仓 `**/SKILL.md` 零命中） | — |
 | 运行时语义：facade / artifact / amend / hole / askUser / escalate / channel / 并发 / 死锁 | ✅ **大部分已移植**，v0.8–v0.12 系统性补齐 | `CHANGELOG.md:11-15` |
 | OS 级沙箱（env 清洗 + 路径限制） | ✅ 有 | v0.9.0 |

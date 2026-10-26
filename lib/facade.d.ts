@@ -99,7 +99,7 @@ declare const __dsh: {
    */
   stages: {
     list(): Promise<readonly InjectedStage[]>;
-    pending(): number;
+    pending(): Promise<number>;
     await(opts?: { timeoutMs?: number }): Promise<void>;
   };
 
@@ -132,10 +132,21 @@ declare const __dsh: {
     optional(shape: unknown): unknown;
   };
 
-  /** Two-stage multi-model routing helper. */
+  /**
+   * Two-stage multi-model routing helper.
+   *
+   * MODELS is a plain map from a tier name to a model id — `{ light: 'model-a',
+   * strong: 'model-b' }`. The router is called with the light model id and
+   * answers with a tier; the answerer is then called with the chosen model's
+   * id.
+   *
+   * This matches the implementation (lib/runner-bootstrap.mjs) and the
+   * engine path's declaration (lib/dwf/dsh-facade.js). An earlier version of
+   * this file declared an ARRAY here, which no implementation ever accepted.
+   */
   route<M extends string>(
-    models: readonly M[],
-    router: (light: M) => Promise<{ tier: 'light' | 'strong' }>,
+    models: Readonly<Record<string, M>>,
+    router: (light: M) => Promise<string | { content?: string; tier?: string }>,
     answerer: (model: M) => Promise<string>
   ): Promise<string>;
 };

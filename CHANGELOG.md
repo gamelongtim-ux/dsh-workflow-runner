@@ -12,70 +12,136 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- The plugin was installed but **never activated**, in any profile whose
-  `cordis.patch.yml` carried a `disabled: true` row for it. The symptom was
-  a silent 404 on `/workflow/` with no warning anywhere.
+- **A provider error no longer takes down the dsh host.** This was the
+  worst defect in the port.
 
-  The cause was in the profile's patch file, not in this package. dsh's
-  patch algorithm (`applyEntryPatches`, in `@deepseek-ai/cordis-plugin-include`)
-  applies patches **in file order** and indexes an inserted row **immediately**
-  — so this file:
+  `lib/dwf/driver.js` handed `sink.askFailed` a plain object. The engine
+  serialises a failed ask's error with `error.toJSON()`
+  (upstream: `engine/scheduler.ts` → `settleFailed`), so a plain object
+  turned a transient provider error into
+  `TypeError: error.toJSON is not a function` — an uncaught exception, and
+  the host process died.
 
-  ```yaml
-  - insert:
-      - id: dsh-workflow-runner
-        name: dsh-workflow-runner
-        config: { path: /workflow }
-  - id: dsh-workflow-runner
-    disabled: true
-  ```
+  Since the model-facing `create_workflow` tool runs workflows on this
+  path, **the model could crash dsh** by writing a workflow that hit a bad
+  model call.
 
-  creates the row and then disables it, in the same pass. There is no
-  precedence rule that lets the insert win; only the order matters. dsh's
-  startup audit skips disabled rows, so a plugin disabled this way produces
-  **no diagnostic at all**.
+  The error is now a `WorkflowError`, and a **deterministic** provider
+  error is mapped to upstream's `ProviderStop` code, so the run stops with
+  `stopped(provider)` instead of failing one node. The classification is
+  by HTTP status — 401/403 (auth), 402/429 (quota), 404 (model
+  unavailable) — matching upstream's `ProviderStopDetails.kind` buckets. A
+  transient error (a socket reset, a 503) still fails the one ask.
 
-  The fix is the row itself — `disabled: false` is dsh's documented
-  force-enable form:
+- **The engine's control plane binds now.** `#engineRun` destructured the
+  plan *without* `control`, so the harness's live engine handle never
+  reached dsh. That made `fill_workflow_hole` dead and made a live run's
+  concurrency ceiling unchangeable.
 
-  ```yaml
-  - id: dsh-workflow-runner
-    disabled: false
-  ```
+- **`fill_workflow_hole` works on the engine path.** Upstream's contract
+  is not "answer this hole" — it is "this run's **valid script** is now
+  this text". `fillHole` takes a `HoleFill` (the recompiled script, its
+  hash, the ask spec table, the site-phase table), not `(holeId, body)`.
+  A fill now splices the body into the script source, recompiles, and
+  hands the engine the new valid script; a fill that does not compile is
+  refused with the reason.
 
-  The profile patch file is hot-reloaded, so this takes effect without
-  restarting dsh. This entry documents the cause; it is not a code change in
-  the package.
+- **Structural amend works on the engine path.** `injectStage` required a
+  child process, and an engine run has none, so `stages.list()` was always
+  empty and `amend_workflow` always failed. The stage is now parked on the
+  host side and the script picks it up with `stages.run(stageId)`;
+  `stages.await({ forStage: true })` parks the script until a stage
+  *arrives*.
 
-  `scripts/patch-sim.mjs` replays dsh's own patch algorithm against a
-  profile and prints the composed rows plus a verdict, so the state can be
-  checked without guessing.
+  The wait returns when a stage arrives, not when it settles: the stage
+  settles only after the script runs it, so waiting for the settle would
+  deadlock the pair.
+
+- **`concurrency.stat()` reports real numbers on the engine path.** It
+  read dsh's semaphore, which the engine path never acquires — the
+  engine's own scheduler admits asks. So it reported zeros for a run that
+  was plainly busy. The driver now counts the engine's asks.
+
+- **Two facades no longer drift.** `route` was declared in
+  `lib/facade.d.ts` as taking an **array** while every implementation
+  takes a **map**; `stages.pending()` was declared synchronous on one
+  side and a promise on the other. Both are fixed, and
+  `scripts/dwf-facade-drift-check.mjs` now guards them.
+
+- **The plugin was installed but never activated.** The cause was in the
+  profile's patch file, not in this package: a `disabled: true` row for
+  the plugin disabled the row the `insert:` above it had just created.
+  dsh's patch algorithm applies patches in file order and indexes an
+  inserted row immediately, and its startup audit skips disabled rows —
+  so the plugin was never imported and `/workflow/` answered 404 with no
+  diagnostic anywhere. The row is now `disabled: false`, dsh's documented
+  force-enable form. The profile patch file is hot-reloaded, so this
+  takes effect without restarting dsh.
 
 ### Added
 
+- `scripts/dwf-failure-check.mjs` — the engine path's **failure** paths:
+  a transient provider error fails the ask without crashing; a
+  deterministic one stops the run with `ProviderStop`; the control plane
+  binds; the concurrency telemetry is real.
+
+- `scripts/dwf-hole-fill-check.mjs` — a hole fill on an engine run: a
+  fill that does not compile is refused, a valid fill is accepted, and the
+  run finishes with the filled body's value.
+
+- `scripts/dwf-stage-check.mjs` — structural amend on an engine run: the
+  stage is injected, the script runs it, and its result comes back.
+
 - `scripts/dwf-port-coverage.mjs` — checks that all four upstream engine
   ports are still implemented, and that every method of `WorkflowDriver`
-  (the one port dsh owns) exists in `lib/dwf/driver.js`. Wired into
-  `node scripts/run-all-checks.mjs`.
-
-  The check encodes who implements what, which is not obvious from the
-  port list alone: upstream's `WorkflowEngine` implements `WorkflowHostApi`
-  and `WorkflowReportSink`, upstream's `InMemoryJournalStore` implements
-  `JournalStorePort` (dsh wraps it with a write-through layer), and dsh
+  (the one port dsh owns) exists. It encodes who implements what, which
+  the port list alone does not say: upstream's `WorkflowEngine`
+  implements `WorkflowHostApi` and `WorkflowReportSink`, upstream's
+  `InMemoryJournalStore` implements `JournalStorePort`, and dsh
   implements only `WorkflowDriver`.
+
+- `scripts/dwf-facade-drift-check.mjs` — compares the legacy facade
+  (`lib/facade.d.ts`) with the engine facade
+  (`lib/dwf/dsh-facade.js`) and reports members that disagree.
+
+- `scripts/patch-sim.mjs` — replays dsh's own patch algorithm against a
+  profile and prints the composed rows plus a verdict, so the activation
+  state can be checked without guessing.
 
 - `scripts/asar-read.mjs` now locates the asar header JSON instead of
   assuming it starts at byte 12. Some asar builds frame it with four
   UInt32 words rather than three, and the old reader failed with a JSON
   parse error on those.
 
+### Changed
+
+- **The skill gate now covers every tool that accepts code**, not just
+  `create_workflow`. Upstream gates `CreateWorkflow` / `AmendWorkflow` /
+  `SaveWorkflow` / `EvalWorkflowSnippet`; dsh now gates those plus
+  `fill_workflow_hole` and `amend_workflow`. Gating only one left the
+  others as a way to submit a workflow written without the contract.
+
+- **`save_workflow`'s `scope` is required and has no default**, matching
+  upstream. `global` now really saves to the global directory instead of
+  being coerced to `project`.
+
+- **`create_workflow` takes a `saved` source**, closing the save→run
+  loop: a workflow saved by `save_workflow` can now be run by name.
+  Exactly one of `script`, `path` or `saved` is required.
+
+- **`amend_workflow` takes `max_concurrency`**, so a run that is already
+  going can have its ceiling changed — upstream has this on
+  `AmendWorkflow` for the same reason.
+
+- **`fill_workflow_hole`'s result is awaited** and reports a refusal
+  instead of claiming success for a fill that never happened.
+
 ### Documentation
 
-- The README's "Out of scope" section claimed the vendored engine was **not
-  wired to dsh's runtime** and that the user-facing path was still the
-  pre-v0.13 one. That was stale: the engine path has been live since
-  v0.13.0, and it is the path the **model** uses (`create_workflow` and the
-  other model-facing tools always compile before they run).
+- The README's "Out of scope" section claimed the vendored engine was
+  **not wired to dsh's runtime** and that the user-facing path was still
+  the pre-v0.13 one. That was stale: the engine path has been live since
+  v0.13.0, and it is the path the **model** uses.
 
   Both READMEs now describe the two run paths side by side — engine path
   (`.dwf.ts`, compiled, four graphs, `ask<T>()`) and legacy path (`.mjs` /
@@ -84,6 +150,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The troubleshooting section now leads with the `disabled: true` case,
   because it is silent and it is the most common reason the plugin appears
   to be missing.
+
+- `docs/dynamic-workflow-port.md` records what the failure-path work
+  found and fixed, and — just as importantly — what is **still missing**:
+  `ResumeWorkflowRun`, a durable engine journal (so no resume and no
+  imported cache), the process-level AIMD governor, and `askMutating`.
 
 ## [0.15.3] — 2026-10-20
 
