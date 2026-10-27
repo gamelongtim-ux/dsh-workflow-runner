@@ -8,6 +8,74 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.4] — 2026-10-27
+
+### Fixed
+
+- **The tools were registered with a schema the model gateway rejects.**
+  This one killed the whole session, not just a tool call.
+
+  The plugin registered its ten model-facing tools with a FLAT
+  `parameters` map:
+
+  ```js
+  parameters: {
+    script: { type: 'string', description: '…' },
+    path:   { type: 'string', description: '…' },
+  }
+  ```
+
+  That is how a tool reads in source, but it is **not a JSON Schema**:
+  the model is shown a schema, and that schema needs a root —
+  `{ type: "object", properties: { … } }`. The host's `defineTool` is
+  what builds it (`parameterSchemaSpecToJsonSchema` wraps the flat map
+  in the root object and adds the `required` list). Registering the flat
+  map directly skips that conversion.
+
+  `ctx.tools.register()` only validates `output.schema` — never
+  `parameters` — so nothing complained at registration time. The gateway
+  does the complaining, and it complains about **every turn**, because
+  the invalid schema sits in the model's tool list rather than in one
+  call: HTTP 400 / code `11129 "invalid function call parameters"`.
+
+  **This is why the plugin was removed from a dsh profile on 2026-10-26.**
+  It was reinstalled here once the schema was corrected.
+
+  The tools now go through `defineTool` before they are registered,
+  using the host's own `@deepseek-ai/dsh-tools` when it resolves and a
+  local fallback when it does not.
+
+  The fallback is not a guess. The host's rule — read out of the
+  installed dsh — is that a parameter is required only if it declares
+  `required: true`; the fallback implements exactly that. (An earlier
+  version used "required unless it says it is optional", which would
+  have marked optional parameters required and made the model invent
+  values for them.)
+
+### Added
+
+- `scripts/dwf-tool-schema-check.mjs` — every tool's schema has a root
+  object and a typed property for each parameter.
+
+- `scripts/dwf-tool-schema-host-compare.mjs` — the local fallback is
+  compared against the **real installed host**, whose rule is read out of
+  the host's own source rather than a copy of it.
+
+- `GET /workflow/api/tool-schema` — reports which conversion is in use
+  and every tool's schema, so the question can be answered from a
+  running host instead of guessed at.
+
+### Changed
+
+- `scripts/dwf-apply-check.mjs` now inspects the definitions that reach
+  the registry. It drives the plugin's real `apply()` against a mock
+  cordis context, so it sees exactly what the host sees — this is the
+  check that would have caught the schema bug.
+
+- The README's troubleshooting section leads with the `11129` failure
+  mode, because it is silent until it is fatal, and it cost a real
+  removal from a profile.
+
 ## [Unreleased]
 
 ### Added

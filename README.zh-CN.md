@@ -630,6 +630,35 @@ LLM 子代理直接打 DeepSeek `/v1/chat/completions`,优先通过 `ctx.llm.res
 3. 你在**新会话**里看(左下角 → 新会话),不是装插件之前打开的老会话
 4. dsh 桌面版是 **V0.2.0-rc.2 或以上**——已声明为 `engines.dsh`;老版本可能没有 `conversation.composer.dock` 这个 slot
 
+### 每一轮对话都报 `invalid function call parameters`(网关错误码 11129)
+
+**这个不是只废掉一个工具调用,是整个会话都废掉。** 如果 dsh 里每一轮对话都回 HTTP 400 / 错误码 `11129 "invalid function call parameters"`,说明插件注册的 tool schema 被模型网关拒了。
+
+在 **v0.15.4** 修复。插件原本用**扁平**的 `parameters` map 注册它的 10 个模型面 tool:
+
+```js
+parameters: {
+  script: { type: 'string', description: '…' },
+  path:   { type: 'string', description: '…' },
+}
+```
+
+源码里这么写很自然,但它**不是 JSON Schema**:模型看到的是 schema,schema 需要一个根 —— `{ type: "object", properties: { … } }`。宿主的 `defineTool` 才是干这个的(`parameterSchemaSpecToJsonSchema` 把扁平 map 包进根对象,并补上 `required` 列表)。直接注册扁平 map 就跳过了这一步。
+
+`ctx.tools.register()` 只校验 `output.schema`,**从不校验 `parameters`**,所以注册的时候没人报错。报错的是网关,而且是**每一轮**都报——因为这个非法 schema 一直在模型的 tool 列表里,不是只在那一次调用里。
+
+现在 tool 都先经过 `defineTool` 再注册:宿主的 `@deepseek-ai/dsh-tools` 能解析就用它,解析不了就用插件自己的兜底实现。
+
+兜底不是猜的:宿主的规则(**从装好的 dsh 里读出来的**)是——参数只有在声明了 `required: true` 时才是必填;兜底实现的正是这条规则。`scripts/dwf-tool-schema-host-compare.mjs` 会拿**真实安装的宿主**来比对,而不是拿一份拷贝。
+
+想知道当前跑着的宿主用的是哪一种转换、以及每个 tool 的 schema:
+
+```bash
+curl http://127.0.0.1:<端口>/workflow/api/tool-schema
+```
+
+> **这个故障模式正是插件 2026-10-26 被从 profile 里移除的原因。** 如果你发现 patch 文件里插件不见了,先看那里的注释——通常写着原因和修好的版本号。
+
 ### 打开 `/workflow` 报 `ERR_TOO_MANY_REDIRECTS`
 
 在 **v0.1.5** 修复了。`/workflow` 和 `/workflow/` 原本都 302 到 `/workflow/`,于是带斜杠那个自己跳自己,永远跳不完。修复后 `/workflow/` 直接返回 `index.html`,只有不带斜杠的 `/workflow` 会重定向。

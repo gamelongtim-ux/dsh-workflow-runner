@@ -818,6 +818,53 @@ Otherwise, check in order:
    `engines.dsh`; older versions may not have the
    `conversation.composer.dock` slot we register against.
 
+### Every turn fails with `invalid function call parameters` (gateway code 11129)
+
+**This one kills the whole session, not just a tool call.** If every turn
+in dsh answers with HTTP 400 / code `11129 "invalid function call
+parameters"`, the plugin's tools are registered with a schema the model
+gateway rejects.
+
+Fixed in **v0.15.4**. The plugin used to register its tools with a FLAT
+`parameters` map:
+
+```js
+parameters: {
+  script: { type: 'string', description: '…' },
+  path:   { type: 'string', description: '…' },
+}
+```
+
+That is how a tool reads in source, but it is **not a JSON Schema**: the
+model is shown a schema, and that schema needs a root —
+`{ type: 'object', properties: { … } }`. The host's `defineTool` is what
+builds it (`parameterSchemaSpecToJsonSchema` wraps the flat map in the
+root object and adds the `required` list). Registering the flat map
+directly skips the conversion.
+
+`ctx.tools.register()` only validates `output.schema` — never
+`parameters` — so nothing complained at registration time. The gateway
+does the complaining, and it complains about **every turn**, because the
+invalid schema sits in the model's tool list rather than in one call.
+
+The tools now go through `defineTool` before they are registered. The
+host's own `@deepseek-ai/dsh-tools` is used when it resolves, and a
+local fallback when it does not — and the fallback implements the
+host's exact rule (a parameter is required only if it declares
+`required: true`), which `scripts/dwf-tool-schema-host-compare.mjs`
+checks against the **real installed host** rather than a copy of it.
+
+To see which conversion a running host is using, and every tool's
+schema:
+
+```bash
+curl http://127.0.0.1:<port>/workflow/api/tool-schema
+```
+
+> **This failure mode is why the plugin was removed from a profile once.**
+> If you find the tools gone from your patch file, check the comment
+> there — it usually records the reason and the version that fixed it.
+
 ### `ERR_TOO_MANY_REDIRECTS` when opening `/workflow`
 
 Fixed in **v0.1.5**. Both `/workflow` and `/workflow/` redirected to
