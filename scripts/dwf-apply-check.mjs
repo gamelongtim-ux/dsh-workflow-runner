@@ -92,6 +92,34 @@ for (const tool of registered.tools) {
   if (!tool.name) problems.push('a registered tool has no name');
   if (typeof tool.execute !== 'function') problems.push(`tool ${tool.name} has no execute()`);
 }
+
+// The PARAMETER SCHEMA is what the model is shown. A tool registered with
+// a flat `parameters` map — no root `type: "object"` — is not a valid
+// function-call schema, and the gateway rejects it with HTTP 400 / code
+// 11129 "invalid function call parameters", which kills EVERY turn.
+//
+// The plugin was removed from a real dsh profile over exactly this, so
+// the definition that reaches the registry is checked here: this is the
+// last point before the host sees it.
+for (const tool of registered.tools) {
+  const p = tool.parameters;
+  if (p === undefined) {
+    problems.push(`tool ${tool.name} has no parameters`);
+    continue;
+  }
+  if (p.type !== 'object') {
+    problems.push(`tool ${tool.name}: parameters.type is ${p.type}, not "object"`);
+  }
+  if (p.properties === undefined || typeof p.properties !== 'object') {
+    problems.push(`tool ${tool.name}: parameters has no properties`);
+    continue;
+  }
+  for (const [name, spec] of Object.entries(p.properties)) {
+    if (spec === null || typeof spec !== 'object' || typeof spec.type !== 'string') {
+      problems.push(`tool ${tool.name}: the parameter ${name} declares no type`);
+    }
+  }
+}
 if (registered.skills.length !== 1) {
   problems.push(`expected 1 skill, got ${registered.skills.length}`);
 } else if (registered.skills[0].name !== 'dynamic-workflows') {
