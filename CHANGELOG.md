@@ -8,6 +8,52 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.9] — 2026-10-27
+
+### Added
+
+- **The engine's OBSERVATION surface is connected.**
+  `WorkflowReportSink` has eleven members. Eight are decisions or
+  outcomes; three are pure observation — `askProgress`, `askWaiting` and
+  `askExecuting` — and the engine only RECORDS them, as `node-progress`,
+  `node-waiting` and `node-executing`. They are how a long ask looks
+  alive instead of stalled, and the event mapper already knew their
+  names; only the driver never reported them.
+
+  `askExecuting` fires when the model request actually goes out,
+  `askProgress` when a turn resolves, and `askWaiting` when the ask is
+  queued for a retry.
+
+  The order is the contract: the progress of a turn must PRECEDE the
+  usage of that turn — "两条事件的先后是读面的契约" (upstream:
+  `types.ts`). So the driver reports progress, then stats.
+
+### Fixed
+
+- **A typed ask's repair retry never happened.** When a typed result did
+  not fit the schema, the engine calls `respondToSubmit` back into the
+  driver — SYNCHRONOUSLY, from inside `askSubmitAttempted`. The driver
+  removed the ask's pending entry when it reported the outcome, so the
+  retry that had just been scheduled was wiped before it could dispatch.
+
+  The effect: the model was called once, the engine waited for a second
+  submission that never came, and the run failed with "repair budget
+  exhausted" — blaming the model's answer for what was really a lost
+  retry.
+
+  The driver now keeps track of whether the ask scheduled a retry, and
+  leaves its pending entry alone when it did.
+
+  Verified on the real engine path: a typed ask whose result never fits
+  the schema is now called 4 times (1 + 3 repairs) before the budget is
+  reported exhausted — which is the engine's own budget working.
+
+### Added (checks)
+
+- `scripts/dwf-observation-check.mjs` — the observation surface: the
+  three observations are reported, the progress precedes the usage, and a
+  retry reports the wait and re-runs the ask.
+
 ## [0.15.8] — 2026-10-27
 
 ### Added

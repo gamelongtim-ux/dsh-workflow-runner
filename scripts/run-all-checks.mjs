@@ -19,6 +19,7 @@ const CHECKS = [
   ['dwf-port-coverage.mjs', 'engine ports covered'],
   ['dwf-facade-drift-check.mjs', 'facades agree'],
   ['dwf-failure-check.mjs', 'engine failure paths'],
+  ['dwf-observation-check.mjs', 'the engine\'s observations'],
   ['dwf-hole-fill-check.mjs', 'engine hole fill'],
   ['dwf-stage-check.mjs', 'engine structural amend'],
   ['dwf-import-cache-check.mjs', 'engine amend-resume cache'],

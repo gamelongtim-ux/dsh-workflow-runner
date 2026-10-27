@@ -72,8 +72,8 @@ happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真
 
 | 能力 | 状态 |
 |---|---|
+| **`askProgress` / `askWaiting` / `askExecuting`** | ✅ **已接上**（2026-10-27）。这三个是纯观察：引擎只把它们记成 `node-progress` / `node-waiting` / `node-executing`，不据它们做任何决定。它们的作用是让一次长时间的 ask **看起来还在动**，而不是像卡住了。 |
 | **进程级 AIMD 并发调节** | **没有**。上游的 `ConcurrencyController` vendor 进来了但从未实例化。引擎的固定上限是有的（`max_concurrency` 照常生效），只是不会因为 429 自适应收缩。 |
-| **`askProgress` / `askWaiting` / `askExecuting`** | **没有**。都是观察性的：运行面板因此少了「还在忙」的实时信号。 |
 
 ### H. amend-resume（2026-10-26）
 
@@ -120,6 +120,26 @@ resume 的关键在**为什么脚本必须一样**：run 的站点 id 是 journa
 引擎的 resume 分支做的事（上游 `engine-resume.ts`）：从 journal 恢复**结算次序**、**已记录的 ask**、**报告计数**、**产物状态**。所以已经结算过的 ask **不会再付一次钱**。
 
 实测：`scripts/dwf-resume-crashed-check.mjs` —— 同一个 run id + 同一份脚本 → 恢复成功，已结算的 ask 从 journal 结算（`cached: true`），模型没被再次调用；换个脚本 → 拒绝，并点名两个哈希。
+
+### K. 观察面与 repair 重试（2026-10-27）
+
+`WorkflowReportSink` 有 11 个成员。八个是决定或结果，三个是**纯观察**——引擎只把它们记成事件，不据它们做任何决定：
+
+| sink 方法 | 引擎记成 | 什么时候 |
+|---|---|---|
+| `askExecuting` | `node-executing` | 模型请求**真的发出去了** |
+| `askProgress` | `node-progress` | 一轮 turn 解析了 |
+| `askWaiting` | `node-waiting` | 这个 ask 在等下一轮（重试） |
+
+它们的价值是让一次长时间的 ask **看起来还在动**，而不是像卡住了。
+
+**一条顺序契约**：`askProgress` 必须**先于**同一次 turn 的 `askStats`——「两条事件的先后是读面的契约」（上游 `types.ts`）。所以 driver 先报 progress 再报 stats。
+
+**顺带修掉的一个真缺陷**：typed ask 的结果不符合 schema 时，引擎会**同步**回调 `respondToSubmit` 让 driver 重试。而 driver 在上报结果之后会清掉这条 ask 的 pending 条目——**把刚刚排好的重试一起抹掉了**。于是 repair 永远不发生：模型只被调用一次，引擎等一个不会来的第二次提交，最后报「repair budget 耗尽」。
+
+修法是显式记账：driver 记住「这条 ask 排过重试」，清理时就不动它的 pending 条目。
+
+实测：真实引擎路径下，一个始终不符合 schema 的 typed ask 会被调用 **4 次**（1 + 3 次 repair），然后以「submit_result failed schema validation repeatedly and the repair budget is exhausted」失败——**修复预算照常生效**。
 
 ### 已验证的硬事实
 
