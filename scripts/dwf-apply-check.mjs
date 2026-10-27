@@ -93,6 +93,36 @@ for (const tool of registered.tools) {
   if (typeof tool.execute !== 'function') problems.push(`tool ${tool.name} has no execute()`);
 }
 
+// The registered definition must be the one the HOST built, not the
+// plugin's raw spec. The host's `defineTool` wraps `execute` with
+// argument validation; the plugin's fallback does not, and says so.
+//
+// Which one is in use depends on whether `@deepseek-ai/dsh-tools`
+// resolves in this environment — so the check asserts the RIGHT one for
+// the path that was taken, rather than asserting the host's always.
+const usingHostDefineTool = registered.tools.length > 0
+  && /invalid arguments|ToolArgsError/.test(
+    Function.prototype.toString.call(registered.tools[0].execute),
+  );
+for (const tool of registered.tools) {
+  const wrapped = /invalid arguments|ToolArgsError/.test(
+    Function.prototype.toString.call(tool.execute),
+  );
+  if (usingHostDefineTool && !wrapped) {
+    problems.push(
+      `tool ${tool.name} was registered without the host's argument validation`,
+    );
+  }
+}
+// Either way, the definition must carry a real schema — that is the part
+// the model sees, and it is what the gateway rejects when it is wrong.
+for (const tool of registered.tools) {
+  const p = tool.parameters;
+  if (p === undefined || p.type !== 'object' || p.properties === undefined) {
+    problems.push(`tool ${tool.name} was registered without a JSON Schema root`);
+  }
+}
+
 // The PARAMETER SCHEMA is what the model is shown. A tool registered with
 // a flat `parameters` map — no root `type: "object"` — is not a valid
 // function-call schema, and the gateway rejects it with HTTP 400 / code
