@@ -97,6 +97,27 @@ console.log('\n2. a successor with the same ask is a cache hit');
     secondState?._engine?.settlement?.artifact?.answer === 'answer#1: Find the flaky tests.',
     JSON.stringify(secondState?._engine?.settlement?.artifact),
   );
+
+  // The model not being called is necessary but not sufficient: the cache
+  // could have been built and simply ignored. The engine's own journal is
+  // the proof — a cached settle is marked as one.
+  const events = secondState?._engineJournal
+    ?.listEvents(second.runId, { types: 'all', reportItems: 'all' }) ?? [];
+  const settled = events.find((e) => e.event?.type === 'node-settled');
+  check(
+    'the engine settled the ask FROM THE CACHE',
+    settled?.event?.cached === true,
+    JSON.stringify(settled?.event).slice(0, 200),
+  );
+  check(
+    'the settle names the source session',
+    typeof settled?.event?.sourceSessionId === 'string',
+    `sourceSessionId=${settled?.event?.sourceSessionId}`,
+  );
+  // A cached settle must NOT be preceded by a dispatch: a dispatch would
+  // mean the ask went live.
+  const dispatched = events.some((e) => e.event?.type === 'node-dispatched');
+  check('the ask never went live', dispatched === false, `dispatched=${dispatched}`);
 }
 
 console.log('\n3. a successor that WRITES closes the cache');
