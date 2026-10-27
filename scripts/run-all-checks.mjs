@@ -26,6 +26,7 @@ const CHECKS = [
   ['dwf-journal-contract-check.mjs', 'journal: upstream contract'],
   ['dwf-tool-schema-check.mjs', 'tool schemas are valid'],
   ['dwf-tool-schema-host-compare.mjs', 'tool schema matches the host'],
+  ['dwf-peer-resolution-check.mjs', 'host tools resolve as a peer'],
   ['dwf-extras-smoke.mjs', 'extras'],
   ['dwf-tools-smoke.mjs', 'model-facing tools'],
   ['dwf-samples-check.mjs', 'samples compile'],
