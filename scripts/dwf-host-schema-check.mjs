@@ -247,18 +247,50 @@ function assertNever(value) { throw new Error('unexpected: ' + String(value)); }
 
 let assertSupportedJsonSchema;
 let parameterSchemaSpecToJsonSchema;
+let valueSchemaSpecToJsonSchema;
 try {
   // eslint-disable-next-line no-new-func
-  const factory = new Function(`${errorClass}\n${losslessHelpers}\n${constants}\n${extracted}\nreturn { assertSupportedJsonSchema, parameterSchemaSpecToJsonSchema };`);
+  const factory = new Function(`${errorClass}\n${losslessHelpers}\n${constants}\n${extracted}\nreturn { assertSupportedJsonSchema, parameterSchemaSpecToJsonSchema, valueSchemaSpecToJsonSchema };`);
   const mod = factory();
   assertSupportedJsonSchema = mod.assertSupportedJsonSchema;
   parameterSchemaSpecToJsonSchema = mod.parameterSchemaSpecToJsonSchema;
+  valueSchemaSpecToJsonSchema = mod.valueSchemaSpecToJsonSchema;
 } catch (err) {
   console.log(`\n  could not evaluate the host's validator: ${String(err && err.message || err)}`);
   console.log(`\n${failures === 0 ? 'PASS' : `FAIL (${failures} problem(s))`}`);
   process.exit(failures === 0 ? 0 : 1);
 }
 console.log('\n  the host\'s validator was extracted from the installed dsh');
+
+console.log('\n0. the extracted compiler really enforces the rules');
+{
+  // A check that passes because it tests nothing is worse than no check.
+  // These are the three rules the plugin's schemas have to satisfy, each
+  // with the shape the host REFUSES. If the extracted compiler accepted
+  // any of them, it is not the host's compiler and everything below would
+  // be a vacuous pass.
+  const refuses = (schema, label) => {
+    let error = null;
+    try {
+      valueSchemaSpecToJsonSchema(schema);
+    } catch (err) {
+      error = String(err && err.message || err);
+    }
+    check(`the host refuses ${label}`, error !== null, error ?? '(it ACCEPTED it)');
+  };
+  refuses({}, 'a schema with no type');
+  refuses({ type: 'object', properties: {} }, 'an object without additionalProperties');
+  refuses({ type: 'object', additionalProperties: true, properties: { x: { type: 'nonsense' } } },
+    'a property with an unknown type');
+
+  // And one it accepts, so the probe is not simply refusing everything.
+  let accepted = false;
+  try {
+    valueSchemaSpecToJsonSchema({ type: 'object', additionalProperties: true, properties: { x: { type: 'string' } } });
+    accepted = true;
+  } catch (_) { /* refused */ }
+  check('the host accepts a well-formed schema', accepted);
+}
 
 const deps = {
   runtime: {},
@@ -294,7 +326,14 @@ console.log('\n2. the host accepts every output schema');
 for (const tool of tools) {
   let error = null;
   try {
-    assertSupportedJsonSchema(tool.output?.schema);
+    // The host's `defineTool` runs the OUTPUT schema through the
+    // COMPILER (`valueSchemaSpecToJsonSchema`), not just the subset
+    // checker — and the compiler is stricter: a schema with no `type` is
+    // refused outright ("must be string/number/integer/boolean/null/
+    // array/object/json, or use oneOf"), while the subset checker
+    // accepts it. So the output has to go through the compiler too.
+    const compiled = valueSchemaSpecToJsonSchema(tool.output?.schema);
+    assertSupportedJsonSchema(compiled);
   } catch (err) {
     error = String(err && err.message || err);
   }

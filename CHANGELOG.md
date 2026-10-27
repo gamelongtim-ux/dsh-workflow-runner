@@ -8,6 +8,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.7] — 2026-10-27
+
+### Fixed
+
+- **A tool's output schema had no type.** `amend_workflow`'s output
+  declared `result: {}` — an empty schema, which is not a JSON Schema at
+  all. The host's compiler refuses it by name:
+
+  ```
+  unsupported JSON schema: schema.properties.result.type must be
+  string/number/integer/boolean/null/array/object/json, or use oneOf
+  ```
+
+  The stage's result is whatever the stage returned, so it is any JSON
+  value — and `json` is the host's name for that. It is now
+  `result: { type: 'json' }`.
+
+  This was the third rule the host enforces, and the first two were
+  found the same way: by running the plugin's schemas through the
+  host's own compiler.
+
+### Changed
+
+- `scripts/dwf-host-schema-check.mjs` now runs the OUTPUT schema
+  through the host's COMPILER (`valueSchemaSpecToJsonSchema`), not just
+  the subset checker. The compiler is the stricter of the two — a schema
+  with no `type` is refused by the compiler and accepted by the subset
+  checker, which is why this slipped past the first version of the
+  check.
+
+- `scripts/dwf-host-schema-check.mjs` now proves it is a real guard
+  before trusting it: it checks that the extracted compiler REFUSES a
+  schema with no type, an object without `additionalProperties`, and a
+  property with an unknown type, and ACCEPTS a well-formed one. A check
+  that passes because it tests nothing is worse than no check.
+
+## [0.15.6] — 2026-10-27
+
+### Changed
+
+- The version the profile now has installed. It carries the tool-schema
+  fixes: the tools are built with the host's own `defineTool`, every
+  object schema declares `additionalProperties` explicitly, and the local
+  fallback implements the host's rules.
+
+  The host compiles the schemas at load time, so a profile on an older
+  version keeps failing until dsh is restarted.
+
 ## [0.15.5] — 2026-10-27
 
 ### Fixed
