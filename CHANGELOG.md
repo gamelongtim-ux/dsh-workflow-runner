@@ -8,6 +8,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.5] — 2026-10-27
+
+### Fixed
+
+- **The host's schema compiler refused the plugin's object schemas.**
+  The v0.15.4 fix routed the tools through the host's own `defineTool`,
+  and the host's compiler then said no — loudly and by name:
+
+  ```
+  unsupported JSON schema: parameters.args.additionalProperties must be
+  explicitly true or false
+  ```
+
+  The host's compiler requires an object schema to declare
+  `additionalProperties` EXPLICITLY — `true` or `false`, not absent. The
+  plugin's object schemas did not, so the tools could not be built.
+
+  Every object schema now declares it: the `args` parameters of
+  `create_workflow` and `save_workflow`, every tool's output schema, and
+  the fallback's own root.
+
+  The plugin's local fallback had the same gap, and would have hit the
+  same refusal on a host without `@deepseek-ai/dsh-tools`.
+
+### Changed
+
+- `scripts/dwf-tool-schema-host-compare.mjs` now checks the host's
+  compiler rules against every parameter and output schema, not just the
+  required list. The rules are read out of the installed dsh, so the
+  check is against the real compiler rather than a copy of it.
+
 ## [0.15.4] — 2026-10-27
 
 ### Fixed

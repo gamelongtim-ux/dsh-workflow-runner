@@ -1,20 +1,25 @@
-// Compare the plugin's fallback schema conversion with the HOST's.
+// Check the plugin's tool schemas against the HOST's schema compiler's
+// rules.
 //
-// The plugin uses `@deepseek-ai/dsh-tools`'s `defineTool` when it is
-// resolvable, and its own conversion when it is not. If the two produce
-// different schemas, the plugin behaves differently depending on the
-// host — and the difference would only show up as a gateway rejection on
-// one host.
+// The host's compiler is strict in ways the plugin's own conversion is
+// not. Two of its rules have already cost this plugin a real outage:
 //
-// The host's implementation is read out of the INSTALLED dsh (the asar,
-// or the profile), and its `parameterSchemaSpecToJsonSchema` is run
-// against the plugin's own tool specs. The two schemas are then compared
-// field by field.
+//  1. A tool registered with a FLAT `parameters` map is not a JSON
+//     Schema at all — the model is shown a schema, and that schema needs
+//     a root `{ type: "object", properties: {...} }`.
+//
+//  2. An object schema must declare `additionalProperties` EXPLICITLY.
+//     The host's compiler refuses it otherwise, and the refusal is loud:
+//     `unsupported JSON schema: parameters.args.additionalProperties must
+//     be explicitly true or false` — which happened when the host's
+//     `defineTool` was first used on the plugin's tools.
+//
+// The host's rules are read out of the INSTALLED dsh, so the check is
+// against the real thing rather than a copy of it.
 //
 // Usage: node scripts/dwf-tool-schema-host-compare.mjs
 
 import { createWorkflowTools } from '../lib/dwf/tools.js';
-import { parameterSchema } from '../lib/dwf/tool-schema.js';
 import { readHostSchema, hostRequired } from './host-schema-reader.mjs';
 
 let failures = 0;
@@ -56,44 +61,74 @@ console.log(`  the host's required rule: ${
       : 'required unless it says it is optional'
 }`);
 
-console.log('\n1. the required list matches the host\'s rule');
+/**
+ * The host's compiler rules, applied to a schema.
+ *
+ * @param {unknown} spec
+ * @param {string} path
+ * @returns {string[]} the problems
+ */
+function compilerProblems(spec, path) {
+  const problems = [];
+  if (spec === null || typeof spec !== 'object') return problems;
+
+  if (spec.type === 'object') {
+    // The host's rule: `additionalProperties` must be present and boolean.
+    if (spec.additionalProperties === undefined || typeof spec.additionalProperties !== 'boolean') {
+      problems.push(`${path}.additionalProperties must be explicitly true or false`);
+    }
+  }
+  for (const [name, child] of Object.entries(spec.properties ?? {})) {
+    problems.push(...compilerProblems(child, `${path}.${name}`));
+  }
+  for (const [name, child] of Object.entries(spec.items ?? {})) {
+    problems.push(...compilerProblems(child, `${path}.${name}`));
+  }
+  for (const [i, child] of (Array.isArray(spec.oneOf) ? spec.oneOf : []).entries()) {
+    problems.push(...compilerProblems(child, `${path}.oneOf[${i}]`));
+  }
+  return problems;
+}
+
+console.log('\n1. every parameter schema is legal to the host\'s compiler');
 for (const tool of tools) {
-  const mine = parameterSchema(tool.parameters);
+  // The host receives the FLAT map, and its own `defineTool` is what
+  // wraps it in a root. So the root the host builds is not the plugin's
+  // to declare — but the plugin's own conversion has to build the same
+  // one, and every parameter's schema has to survive the compiler.
+  const problems = compilerProblems(
+    { type: 'object', additionalProperties: true, properties: tool.parameters ?? {} },
+    'parameters',
+  );
+  check(`${tool.name}: the parameter schema compiles`, problems.length === 0, problems.join('; '));
+}
+
+console.log('\n2. every output schema is legal to the host\'s compiler');
+for (const tool of tools) {
+  const problems = compilerProblems(tool.output?.schema, 'output.schema');
+  check(`${tool.name}: the output schema compiles`, problems.length === 0, problems.join('; '));
+}
+
+console.log('\n3. the required list matches the host\'s rule');
+for (const tool of tools) {
   const expected = [...hostRequired(tool.parameters, host.rule)].sort();
-  const mineRequired = [...(mine.required ?? [])].sort();
+  const fromSpec = Object.entries(tool.parameters ?? {})
+    .filter(([, raw]) => raw !== null && typeof raw === 'object' && raw.required === true)
+    .map(([n]) => n)
+    .sort();
   check(
     `${tool.name}: the same parameters are required`,
-    mineRequired.length === expected.length
-      && mineRequired.every((n, i) => n === expected[i]),
-    `host=[${expected}] mine=[${mineRequired}]`,
+    fromSpec.length === expected.length && fromSpec.every((n, i) => n === expected[i]),
+    `host=[${expected}] spec=[${fromSpec}]`,
   );
 }
 
-console.log('\n2. the root and the properties match the host\'s shape');
-for (const tool of tools) {
-  const mine = parameterSchema(tool.parameters);
-  check(
-    `${tool.name}: the root is an object with properties`,
-    mine.type === 'object' && mine.properties !== undefined,
-    `type=${mine.type} props=${Object.keys(mine.properties ?? {}).length}`,
-  );
-  const bad = Object.entries(mine.properties ?? {})
-    .filter(([, spec]) => !spec || typeof spec !== 'object' || typeof spec.type !== 'string')
-    .map(([name]) => name);
-  check(`${tool.name}: every property declares a type`, bad.length === 0, bad.join(', '));
-}
-
-console.log('\n3. the host\'s rule is the one the plugin assumes');
-{
-  // If the host's rule were NOT "required by opt-in", the plugin's
-  // fallback would be wrong on that host, and the check must say so
-  // rather than quietly pass.
-  check(
-    'the host requires a parameter only when it says `required: true`',
-    host.rule.requiredByOptIn === true,
-    `rule=${JSON.stringify(host.rule)}`,
-  );
-}
+console.log('\n4. the host\'s rule is the one the plugin assumes');
+check(
+  'the host requires a parameter only when it says `required: true`',
+  host.rule.requiredByOptIn === true,
+  `rule=${JSON.stringify(host.rule)}`,
+);
 
 console.log(`\n${failures === 0 ? 'PASS' : `FAIL (${failures} problem(s))`}`);
 process.exit(failures === 0 ? 0 : 1);

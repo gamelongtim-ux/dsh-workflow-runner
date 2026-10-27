@@ -80,10 +80,33 @@ for (const tool of tools) {
   if (root.type !== 'object') problems.push(`root type=${root.type}`);
   if (root.properties === undefined) problems.push('no properties');
   if (root.required !== undefined && !Array.isArray(root.required)) problems.push('required is not an array');
+  // The HOST's compiler refuses an object schema without an explicit
+  // `additionalProperties`, and the refusal is loud: the tool fails to
+  // build, and with it the whole registration.
+  if (root.additionalProperties !== true && root.additionalProperties !== false) {
+    problems.push('additionalProperties is not explicit');
+  }
   for (const [name, spec] of Object.entries(root.properties ?? {})) {
     if (spec === null || typeof spec !== 'object') problems.push(`property ${name} is not an object`);
   }
   check(`${tool.name}: the schema is gateway-safe`, problems.length === 0, problems.join('; '));
+}
+
+console.log('\n3b. every object schema declares additionalProperties');
+for (const tool of tools) {
+  const problems = [];
+  const visit = (spec, path) => {
+    if (spec === null || typeof spec !== 'object') return;
+    if (spec.type === 'object') {
+      if (spec.additionalProperties !== true && spec.additionalProperties !== false) {
+        problems.push(`${path}.additionalProperties`);
+      }
+    }
+    for (const [k, v] of Object.entries(spec.properties ?? {})) visit(v, `${path}.${k}`);
+    for (const [k, v] of Object.entries(spec.items ?? {})) visit(v, `${path}.${k}`);
+  };
+  visit(tool.output?.schema, 'output.schema');
+  check(`${tool.name}: every output object schema is explicit`, problems.length === 0, problems.join('; '));
 }
 
 console.log('\n4. the tools still execute after the conversion');

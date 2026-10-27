@@ -649,7 +649,11 @@ parameters: {
 
 现在 tool 都先经过 `defineTool` 再注册:宿主的 `@deepseek-ai/dsh-tools` 能解析就用它,解析不了就用插件自己的兜底实现。
 
-兜底不是猜的:宿主的规则(**从装好的 dsh 里读出来的**)是——参数只有在声明了 `required: true` 时才是必填;兜底实现的正是这条规则。`scripts/dwf-tool-schema-host-compare.mjs` 会拿**真实安装的宿主**来比对,而不是拿一份拷贝。
+兜底不是猜的:宿主的规则(**从装好的 dsh 里读出来的**)有两条,兜底实现的就是这两条。`scripts/dwf-tool-schema-host-compare.mjs` 会拿**真实安装的宿主**来比对,而不是拿一份拷贝。
+
+1. 参数**只有在声明了 `required: true` 时**才是必填。(兜底的第一版写的是「除非声明 optional 否则必填」,那会把可选参数标成必填,模型就会去瞎编值。)
+2. **object 类型的 schema 必须显式声明 `additionalProperties`**——写 `true` 或 `false`,不能省。少了它,宿主的编译器会直接拒绝:
+   `unsupported JSON schema: parameters.args.additionalProperties must be explicitly true or false`。
 
 想知道当前跑着的宿主用的是哪一种转换、以及每个 tool 的 schema:
 

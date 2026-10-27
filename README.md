@@ -850,9 +850,20 @@ invalid schema sits in the model's tool list rather than in one call.
 The tools now go through `defineTool` before they are registered. The
 host's own `@deepseek-ai/dsh-tools` is used when it resolves, and a
 local fallback when it does not — and the fallback implements the
-host's exact rule (a parameter is required only if it declares
-`required: true`), which `scripts/dwf-tool-schema-host-compare.mjs`
+host's exact rules, which `scripts/dwf-tool-schema-host-compare.mjs`
 checks against the **real installed host** rather than a copy of it.
+
+There are two rules to get right, and the host enforces both loudly:
+
+1. A parameter is **required only if it declares `required: true`**.
+   (The earlier version of the fallback used "required unless it says it
+   is optional", which would have marked optional parameters required and
+   made the model invent values for them.)
+2. An **object schema must declare `additionalProperties` explicitly** —
+   `true` or `false`, not absent. Without it the host's compiler refuses
+   the schema with
+   `unsupported JSON schema: parameters.args.additionalProperties must
+   be explicitly true or false`.
 
 To see which conversion a running host is using, and every tool's
 schema:
