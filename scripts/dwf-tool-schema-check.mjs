@@ -38,7 +38,7 @@ const deps = {
 };
 
 const tools = createWorkflowTools(deps);
-check('the plugin registers ten tools', tools.length === 10, `count=${tools.length}`);
+check('the plugin registers eleven tools', tools.length === 11, `count=${tools.length}`);
 
 console.log('\n1. every tool builds a schema with a root object');
 for (const tool of tools) {

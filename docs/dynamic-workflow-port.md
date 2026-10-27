@@ -72,7 +72,6 @@ happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真
 
 | 能力 | 状态 |
 |---|---|
-| **`ResumeWorkflowRun` tool** | **没有**。上游有。 |
 | **进程级 AIMD 并发调节** | **没有**。上游的 `ConcurrencyController` vendor 进来了但从未实例化。引擎的固定上限是有的（`max_concurrency` 照常生效），只是不会因为 429 自适应收缩。 |
 | **`askProgress` / `askWaiting` / `askExecuting`** | **没有**。都是观察性的：运行面板因此少了「还在忙」的实时信号。 |
 
@@ -104,6 +103,23 @@ happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真
 **写放大是被测量过的，不是猜的**：write-through 每次都重写整个 run，直接写就是平方级——实测 501 次写、155 KB 的文件，**总写入约 38 MB**。现在 write-through 是**去抖**的（250ms），实测 500 次写只产生 **1 次**整文件写。run 结束时会立即 flush（后继要读它），进程退出时也会 flush（`exit` / `SIGINT` / `SIGTERM`）。
 
 实测：`scripts/dwf-restart-resume-check.mjs` —— 前驱在**第一个进程**跑完，**第二个进程**（同一个 persist 目录）读回前驱并继承缓存，**模型一次都没被调用**。
+
+### J. 两种「resume」（2026-10-27）
+
+「续跑」在 ZCode 里有**两种**，容易混：
+
+| | **amend-resume** | **resume** |
+|---|---|---|
+| 是什么 | **新** run 继承前驱的**缓存答案** | **同一个** run 从它自己的 journal 重启 |
+| 脚本 | 可以不同 | **必须逐字节相同** |
+| 上游 tool | `AmendWorkflow` | `ResumeWorkflowRun` |
+| dsh | ✅ `create_workflow` 的 `resume_from` | ✅ `resume_workflow`（2026-10-27 补上） |
+
+resume 的关键在**为什么脚本必须一样**：run 的站点 id 是 journal 的键，改了脚本就等于把新站点对上旧结果。引擎因此在脚本哈希不一致时**拒绝这次 resume**（`ScriptHashMismatch`），而不是先接受再让 run 失败——一份本来还能用正确脚本 resume 的记录，不该被一次失败的尝试污染。
+
+引擎的 resume 分支做的事（上游 `engine-resume.ts`）：从 journal 恢复**结算次序**、**已记录的 ask**、**报告计数**、**产物状态**。所以已经结算过的 ask **不会再付一次钱**。
+
+实测：`scripts/dwf-resume-crashed-check.mjs` —— 同一个 run id + 同一份脚本 → 恢复成功，已结算的 ask 从 journal 结算（`cached: true`），模型没被再次调用；换个脚本 → 拒绝，并点名两个哈希。
 
 ### 已验证的硬事实
 
@@ -171,7 +187,7 @@ happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真
 | 静态分析四张图 | ❌ 无。`lib/` 全量 grep `site\|causality\|handoff\|lowering\|mermaid\|graph` 仅 7 处**无关**命中 | `lib/runtime.js:981`、`:72`、`:1176` |
 | `ask<T>` 泛型 → JSON Schema | ❌ 无。`T` 是类型层 fiction，运行时被擦除；真实 schema 来自 `opts.result` 的**运行时字面量**，再拼成提示词文本塞给模型 | `lib/facade.d.ts:172`、`lib/runtime.js:2665`、`:1749-1751` |
 | facade `.d.ts` 单一事实源 | ⚠️ 手写镜像。注释自称「Mirrors the ZCode dynamic-workflows §16.2 contract」，但**无 vendored 源、无同步机制** | `lib/facade.d.ts:3`、`CHANGELOG.md:434` |
-| `CreateWorkflow` / `AmendWorkflow` / `SaveWorkflow` / `EvalWorkflowSnippet` 等 10 个 tool | ✅ **10 个 tool 已注册**（`lib/dwf/tools.js` → `ctx.tools.register`）。同名语义既以 HTTP 端点存在，也以模型面 tool 存在。仍有差距：`ResumeWorkflowRun` 缺失，`AmendWorkflow` 被**结构化 stage 注入**取代（有意为之），`FillWorkflowHole` 曾是坏的（2026-10-26 修好） | `lib/dwf/tools.js:104`、`:166`、`:216`、`:353` |
+| `CreateWorkflow` / `AmendWorkflow` / `SaveWorkflow` / `EvalWorkflowSnippet` 等 10 个 tool | ✅ **11 个 tool 已注册**（`lib/dwf/tools.js` → `ctx.tools.register`）。同名语义既以 HTTP 端点存在，也以模型面 tool 存在。上游的 10 个里，`ResumeWorkflowRun` 已补上（`resume_workflow`，2026-10-27）；`AmendWorkflow` 被**结构化 stage 注入**取代（有意为之）；`FillWorkflowHole` 曾是坏的（2026-10-26 修好） | `lib/dwf/tools.js:104`、`:166`、`:216`、`:353` |
 | bundled skill 硬门禁 | ❌ 无 skill 目录（全仓 `**/SKILL.md` 零命中） | — |
 | 运行时语义：facade / artifact / amend / hole / askUser / escalate / channel / 并发 / 死锁 | ✅ **大部分已移植**，v0.8–v0.12 系统性补齐 | `CHANGELOG.md:11-15` |
 | OS 级沙箱（env 清洗 + 路径限制） | ✅ 有 | v0.9.0 |

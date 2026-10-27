@@ -8,6 +8,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.15.8] — 2026-10-27
+
+### Added
+
+- **`resume_workflow` — resume an interrupted run from its own journal.**
+  This is upstream's `ResumeWorkflowRun`, and it is the OTHER kind of
+  resume:
+
+  | | amend-resume | resume |
+  |---|---|---|
+  | what | a NEW run inherits the predecessor's cached answers | the SAME run restarts from its journal |
+  | the script | may differ | **must be byte-identical** |
+  | dsh | `create_workflow`'s `resume_from` | `resume_workflow` |
+
+  The script has to be identical because a run's site ids are the
+  journal's keys — a changed script would put new sites against old
+  results. The engine refuses such a resume with `ScriptHashMismatch`,
+  and it refuses the RESUME rather than accepting it and failing the
+  run: a run that could still be resumed with the right script must not
+  be poisoned by a failed attempt.
+
+  What the engine restores (upstream `engine-resume.ts`): the settle
+  order, the recorded asks, the report tally and the artifact state — so
+  an ask that already settled is NOT paid for again.
+
+  The tool is gated like the other script-carrying tools, and the runtime
+  refuses to resume a run that is still live (it does not need
+  resuming) or one that has no script in its journal.
+
+- `POST /workflow/api/engine/resume` — the same thing over HTTP.
+
+- `scripts/dwf-resume-crashed-check.mjs` — drives the whole chain
+  offline: a run is journaled, the same run id with the same script
+  resumes and settles the recorded ask from the journal without calling
+  the model, a changed script is refused with the hash named, and a live
+  run is refused.
+
+### Changed
+
+- The plugin now registers **11** tools (was 10). The checks that assert
+  the count were updated.
+
 ## [0.15.7] — 2026-10-27
 
 ### Fixed

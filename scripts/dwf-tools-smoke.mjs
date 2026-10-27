@@ -58,7 +58,7 @@ async function main() {
 
   process.stdout.write('\nthe model-facing tools\n');
   const names = tools.map((t) => t.name).sort();
-  check('the tool set is complete', names.length === 10, names.join(', '));
+  check('the tool set is complete', names.length === 11, names.join(', '));
   check('every tool has a description', tools.every((t) => typeof t.description === 'string' && t.description.length > 20));
   check('every tool has an output schema', tools.every((t) => t.output && t.output.schema && typeof t.output.render === 'function'));
 

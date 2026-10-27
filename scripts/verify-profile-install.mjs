@@ -113,7 +113,7 @@ process.stdout.write(
   `apply() registered  : ${registered.tools.length} tool(s), ${registered.skills.length} skill(s), ` +
   `${registered.commands.length} command(s), ${registered.web.length} route(s), ${registered.sections.length} section(s)\n`,
 );
-if (registered.tools.length !== 10) problems.push(`apply() registered ${registered.tools.length} tools, expected 10`);
+if (registered.tools.length !== 11) problems.push(`apply() registered ${registered.tools.length} tools, expected 11`);
 if (registered.skills.length !== 1) problems.push(`apply() registered ${registered.skills.length} skills, expected 1`);
 if (registered.commands.length !== 1) problems.push(`apply() registered ${registered.commands.length} commands, expected 1`);
 if (registered.web.length !== 1) problems.push(`apply() registered ${registered.web.length} routes, expected 1`);

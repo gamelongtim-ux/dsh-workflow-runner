@@ -23,6 +23,7 @@ const CHECKS = [
   ['dwf-stage-check.mjs', 'engine structural amend'],
   ['dwf-import-cache-check.mjs', 'engine amend-resume cache'],
   ['dwf-restart-resume-check.mjs', 'resume survives a restart'],
+  ['dwf-resume-crashed-check.mjs', 'resume an interrupted run'],
   ['dwf-journal-contract-check.mjs', 'journal: upstream contract'],
   ['dwf-tool-schema-check.mjs', 'tool schemas are valid'],
   ['dwf-tool-schema-host-compare.mjs', 'tool schema matches the host'],

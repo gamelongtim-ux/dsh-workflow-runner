@@ -85,8 +85,8 @@ process.stdout.write(`commands registered : ${registered.commands.length}\n`);
 process.stdout.write(`web routes          : ${registered.web.length}\n`);
 process.stdout.write(`settings sections   : ${registered.sections.length}\n`);
 
-if (registered.tools.length !== 10) {
-  problems.push(`expected 10 tools, got ${registered.tools.length}`);
+if (registered.tools.length !== 11) {
+  problems.push(`expected 11 tools, got ${registered.tools.length}`);
 }
 for (const tool of registered.tools) {
   if (!tool.name) problems.push('a registered tool has no name');

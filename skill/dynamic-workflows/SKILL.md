@@ -258,7 +258,29 @@ const fix = await hole<Fix>(
 The run parks at the hole; the rest of it keeps going. The body runs in the
 hole's place and sees the bindings declared before it.
 
-## 11. Anti-patterns
+## 11. Resuming an interrupted run
+
+If a run was interrupted, it can be picked up where it stopped:
+
+```
+resume_workflow { run_id, script }
+```
+
+The `script` must be **byte-identical** to the one the run started with.
+That is not a formality: a run's site ids are its journal's keys, so a
+changed script would put new work against old results. The engine refuses
+a resume whose script changed, and names the two hashes.
+
+An ask that already settled is **not paid for again** — it is settled
+from the journal.
+
+There is a different tool for a different job: `create_workflow` with
+`resume_from` starts a **new** run that inherits an earlier run's cached
+answers, and the script there may differ. Use `resume_from` when you
+changed the plan; use `resume_workflow` when you want the same plan
+finished.
+
+## 12. Anti-patterns
 
 - **One giant agent doing everything.** Split the work: different agents,
   different system prompts, one job each.
@@ -275,7 +297,7 @@ hole's place and sees the bindings declared before it.
 - **A `phase()` with nothing in it.** Every phase needs an `ask` or a
   `world.run`.
 
-## 12. Before you submit
+## 13. Before you submit
 
 - Every `ask` that needs structure has a type argument, and every field of
   that type has a doc comment.
