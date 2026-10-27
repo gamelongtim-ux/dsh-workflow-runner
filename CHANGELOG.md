@@ -39,6 +39,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   required list. The rules are read out of the installed dsh, so the
   check is against the real compiler rather than a copy of it.
 
+### Added
+
+- `scripts/dwf-host-schema-check.mjs` — the definitive proof: the
+  host's OWN schema compiler and validator are read out of the installed
+  dsh and run against the plugin's real tool schemas. If the host would
+  refuse a schema, this refuses it, with the host's own message.
+
+  It found the second rule the host enforces — an object schema must
+  declare `additionalProperties` explicitly — and it is how the
+  `additionalProperties` fix was verified without a host restart.
+
+  The helpers the validator calls from other host packages are provided
+  as real implementations, not stubs. That matters: the host's validator
+  calls `isJsonValue` inside a try/catch, so a throwing stub is
+  reported as "annotation must be lossless JSON data" — which blames
+  the plugin's descriptions for a problem that is really the stub's.
+
 ## [0.15.4] — 2026-10-27
 
 ### Fixed
