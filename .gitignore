@@ -20,3 +20,6 @@ dev-probe-gcm.ps1
 packages/dynamic-workflow/dist/
 packages/dynamic-workflow/src/compiler/libs.generated.ts
 packages/dynamic-workflow-runtime/dist/
+
+# the throwaway npmrc the web-2FA publish wrapper writes
+.npmrc.webauth

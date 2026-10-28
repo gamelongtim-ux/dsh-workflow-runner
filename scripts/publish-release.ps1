@@ -194,6 +194,11 @@ Write-Step 'Publishing'
 Write-Host '    If the account has 2FA on, npm will open your browser to authorize' -ForegroundColor DarkGray
 Write-Host '    this publish. Touch the security key there. Do NOT type a recovery' -ForegroundColor DarkGray
 Write-Host '    code into any OTP prompt - that puts the account on a 72-hour hold.' -ForegroundColor DarkGray
+Write-Host ''
+Write-Host '    If npm asks for a code instead of opening the browser, npm did not' -ForegroundColor DarkGray
+Write-Host '    start its web flow. Use the wrapper instead, which starts it:' -ForegroundColor DarkGray
+Write-Host '      node scripts/publish-with-webauth.mjs' -ForegroundColor DarkGray
+Write-Host '' -ForegroundColor DarkGray
 Push-Location $repoRoot
 try {
   $ErrorActionPreference = 'Continue'
