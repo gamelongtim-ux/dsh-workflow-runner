@@ -73,7 +73,7 @@ happy path 全绿而失败路径有洞，是这一轮的主要发现。四条真
 | 能力 | 状态 |
 |---|---|
 | **`askProgress` / `askWaiting` / `askExecuting`** | ✅ **已接上**（2026-10-27）。这三个是纯观察：引擎只把它们记成 `node-progress` / `node-waiting` / `node-executing`，不据它们做任何决定。它们的作用是让一次长时间的 ask **看起来还在动**，而不是像卡住了。 |
-| **进程级 AIMD 并发调节** | **没有**。上游的 `ConcurrencyController` vendor 进来了但从未实例化。引擎的固定上限是有的（`max_concurrency` 照常生效），只是不会因为 429 自适应收缩。 |
+| **进程级 AIMD 并发调节** | ✅ **已接上**（2026-10-28）。见 §L。 |
 
 ### H. amend-resume（2026-10-26）
 
@@ -140,6 +140,36 @@ resume 的关键在**为什么脚本必须一样**：run 的站点 id 是 journa
 修法是显式记账：driver 记住「这条 ask 排过重试」，清理时就不动它的 pending 条目。
 
 实测：真实引擎路径下，一个始终不符合 schema 的 typed ask 会被调用 **4 次**（1 + 3 次 repair），然后以「submit_result failed schema validation repeatedly and the repair budget is exhausted」失败——**修复预算照常生效**。
+
+### L. 进程级并发治理器（2026-10-28）
+
+**引擎自己不做并发决策。** 它最多准入 `caps.maxConcurrency` 个活跃 ask，而这个上限来自 run 记录。**单个模型请求的准入属于治理器**：一个按 provider key 组织的 AIMD 状态机——provider 限流时压低上限，provider 证明更高水位能用时再爬回去。
+
+上游把这个状态机作为**纯类**交付：`ConcurrencyController`（不读时钟、不做 I/O，`now` 由调用方传入），vendor 进来了**一个字没改**（`packages/dynamic-workflow/src/engine/concurrency.ts`）。
+
+**本移植补的是上游放在控制器之外的那部分**（`lib/dwf/governor.js`）：
+
+| 决定 | 答案 | 为什么 |
+|---|---|---|
+| **谁当治理器** | **进程级**，一个 runtime 一个 | provider 的限流是**provider 的事实**，不是某个 run 的事实。两个 run 打同一个 key 共享一份额度，学到的上限就必须共享 |
+| **key 是什么** | `${providerId}/${modelId}` | provider 的限流是**按模型**的：一个模型被限流说明不了另一个模型的事 |
+| **信号从哪来** | driver 的模型调用 | 请求发出 = 准入；请求结束 = 成功 / 限流 / 瞬态失败 |
+| **状态存在哪** | 内存，进程级 | 上游的控制器是纯的；跨进程共享上限需要一个共享存储，那是上游 run service 的事，不在这个移植的范围里 |
+
+**关键区分**：限流和「provider 病了」不是一回事。429/503 说明**上限太高**，上限要降；5xx/超时说明 **provider 不好**，上限不该动——否则 provider 难受一分钟，所有别的 run 都得陪葬。
+
+**epoch 是让旧裁决失效的机制**：一个请求带着它被准入时的 epoch 回来，429 只在 epoch 还是当前 epoch 时才评价当前上限；旧 epoch 的 429 只清 streak、刷 cooldown。
+
+**一个上游的坑**：`ConcurrencyController` 的 `growthLimit` 是**构造时的值**，不跟随 `setGrowthLimit` 走。读它会以为天花板还是初始并发，于是上限永远爬不上去。得从 `snapshot()` 读。
+
+实测（`scripts/dwf-governor-runtime-check.mjs`，真实 run，模型一直回 429）：
+
+```
+cap 8 → 6（第一次限流）→ 4（第二个 run 继承同一个上限，再被限流）
+concurrency-changed 事件：1 条，reason=rate_limited，8 → 6
+```
+
+而**正常路径完全不受影响**：一次成功的 run 之后，cap 仍是 8，没有任何 `concurrency-changed` 事件。
 
 ### 已验证的硬事实
 

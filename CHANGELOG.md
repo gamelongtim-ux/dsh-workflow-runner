@@ -8,6 +8,66 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.16.0] — 2026-10-28
+
+### Added
+
+- **The process-level concurrency governor.** The last gap in the port.
+
+  The engine does not own the concurrency decision. It admits at most
+  `caps.maxConcurrency` live asks, and the ADMISSION of individual model
+  requests beneath that belongs to a governor: a per-provider-key AIMD
+  state machine that shrinks the cap when the provider throttles and grows
+  it back when the provider proves the higher level works.
+
+  Upstream ships that state machine as a pure class —
+  `ConcurrencyController`, no clock and no I/O — and it is vendored here
+  **unmodified**. What this port adds is the part upstream keeps outside
+  the controller (`lib/dwf/governor.js`):
+
+  - **The governor is process-level.** A provider's rate limit is a fact
+    about the provider, not about a run: two runs against the same model
+    share one budget, so the learned cap has to be shared too.
+  - **The key is `${providerId}/${modelId}`.** A provider's limit is per
+    model — a throttle on one says nothing about another.
+  - **A throttle is told apart from an unwell provider.** 429 and 503 mean
+    the cap is too high; a 5xx or a timeout means the provider is unwell,
+    and shrinking the cap for that would punish every other run.
+  - **The provider's own cooldown is honoured.** `Retry-After` is now
+    captured from the response (`lib/llm.js`) and turned into the
+    controller's cooldown.
+
+  The epoch is what makes a stale verdict ignorable: a request carries the
+  epoch it was admitted under, so a 429 for a request issued under a cap
+  that has since been lowered says nothing about the current one.
+
+  Measured on a real run against a provider that always answers 429: the
+  cap goes 8 → 6 → 4, and the engine records a `concurrency-changed` event
+  each time. A normal run is unaffected — the cap stays where it is and
+  no event is emitted.
+
+  One upstream trap, worth writing down: the controller's public
+  `growthLimit` is the value it was CONSTRUCTED with and does not follow
+  `setGrowthLimit`. Reading it makes the governor believe the ceiling is
+  still the initial concurrency, and the cap can never climb. It has to
+  be read from `snapshot()`.
+
+- `scripts/dwf-governor-check.mjs` — the governor's behaviour: the
+  classification of a failure, the cap coming down on a throttle and
+  staying put on a transient one, the state being shared across runs but
+  not across keys, the cap growing only on proven success AND demand, and
+  a stale verdict changing nothing.
+
+- `scripts/dwf-governor-runtime-check.mjs` — the governor in a REAL run:
+  a 429 lowers the cap, the engine records the change, and the next run
+  inherits the learned cap.
+
+### Changed
+
+- `lib/llm.js` now captures the provider's `Retry-After` (seconds or an
+  HTTP date) onto the error, so the governor can honour the provider's own
+  cooldown instead of guessing.
+
 ## [0.15.9] — 2026-10-27
 
 ### Added
