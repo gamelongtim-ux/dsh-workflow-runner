@@ -96,5 +96,23 @@ console.log('\n4. the cap is shared — a second run inherits it');
   check('the second run was attempted', runtime.runs.get(second.runId) !== undefined);
 }
 
+console.log('\n5. the governor\'s state is observable');
+{
+  // The host exposes it, so a user can see the shared budget and the cap
+  // it learned — without waiting for a throttle to prove it works.
+  const snapshot = runtime.concurrencySnapshot();
+  check('the runtime reports the governor', Array.isArray(snapshot),
+    `type=${typeof snapshot}`);
+  check('the governor has a controller for the key', snapshot.length >= 1,
+    JSON.stringify(snapshot.map((s) => s.key)));
+  const controller = snapshot[0];
+  check('the snapshot carries the cap', typeof controller?.cap === 'number',
+    `cap=${controller?.cap}`);
+  check('the snapshot carries the key', typeof controller?.key === 'string',
+    `key=${controller?.key}`);
+  check('the snapshot carries the epoch', typeof controller?.epoch === 'number',
+    `epoch=${controller?.epoch}`);
+}
+
 console.log(`\n${failures === 0 ? 'PASS' : `FAIL (${failures} problem(s))`}`);
 process.exit(failures === 0 ? 0 : 1);
