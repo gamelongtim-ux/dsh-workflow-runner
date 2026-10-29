@@ -77,7 +77,7 @@ handing the URL to.
 
 | Path | What the user pastes in dsh's "添加插件" dialog | Notes |
 | --- | --- | --- |
-| **npm name** *(default)* | `dsh-workflow-runner` | Published on npmjs.org. The current release is **0.16.2**. Fastest in China through npm's mirror, and locks a version. |
+| **npm name** *(default)* | `dsh-workflow-runner` | Published on npmjs.org; the `latest` dist-tag is the current release. Fastest in China through npm's mirror, and locks a version. |
 | **GitHub URL** | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | Always available; pulls the latest `main` HEAD rather than a released version. |
 | **Local path** | `<absolute path to a cloned checkout>` | Best for users who want to follow your local edits; pair with `update.cmd`. |
 
@@ -102,13 +102,14 @@ works fine.
 install:
 
 ```bash
-dsh plugin --profile desktop add dsh-workflow-runner@0.16.2
+dsh plugin --profile desktop add dsh-workflow-runner@0.16.3
 ```
 
-To see what is published:
+To see what is published — and which one is `latest`:
 
 ```bash
 npm view dsh-workflow-runner versions
+npm view dsh-workflow-runner dist-tags
 ```
 
 > 📌 pnpm caches by path, so `add file:"$PWD"` will not re-copy the same

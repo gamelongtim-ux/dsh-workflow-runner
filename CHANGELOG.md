@@ -8,6 +8,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.16.3] — 2026-10-29
+
+### Changed
+
+- **The READMEs describe what is actually there.** The "server-side
+  runtime" bullet still said the plugin spawns the script as a Node
+  child process over JSON-RPC — that is the LEGACY path. The engine
+  path, built on ZCode's own vendored engine, has been the one the
+  model uses since the port. Both READMEs now describe it: the
+  vendored engine, the four graphs, the typed asks, and what this
+  plugin adds on top.
+
+- **The install section names the current release** and says how to
+  install a specific version, and how to see what is published. It
+  points at the `latest` dist-tag rather than a hardcoded number:
+  the README ships INSIDE the package, so a hardcoded version is
+  always one release behind.
+
+### Added (documentation)
+
+- **Resume** and **the concurrency governor** are now documented for
+  users, not only in the port analysis:
+
+  - Resume needs the **byte-identical** script, and the error says
+    so: a run's site ids are its journal's keys, so a changed script
+    would put new work against old results. The engine refuses and
+    names both hashes. The alternative — a new run with `resume_from` —
+    is the amend-resume path, where the script may differ.
+  - The governor's rate is shared by every run against the same model,
+    because a provider's limit is a fact about the provider. A throttle
+    brings the cap down; proven success AND demand bring it back up; a
+    transient failure does NOT move it. And a quota error is not a
+    throttle: an exhausted balance stops the run rather than shrinking
+    everyone's rate.
+
+- `docs/dynamic-workflow-port.md` §M records the release history, and
+  why the eight intermediate versions were deliberately NOT published.
+
+### Fixed
+
+- `scripts/dwf-publish-verify.mjs` no longer compares one version's
+  tarball against ANOTHER version's digests. The version comes from the
+  argument, or from package.json — a hardcoded one would have produced
+  a wrong answer rather than a missing one. It also exits by setting
+  `process.exitCode` instead of calling `process.exit()`, which trips
+  an assertion in Node on Windows while a socket is still open.
+
 ## [0.16.2] — 2026-10-29
 
 ### Added

@@ -39,7 +39,7 @@
 dsh plugin --profile desktop add dsh-workflow-runner
 ```
 
-这会装 npm 上的正式发布版(当前是 **0.16.2**)。想跟这个仓库的最新 `main`:
+这会装 npm 上的正式发布版(`latest` 就是当前版本)。想跟这个仓库的最新 `main`:
 
 ```bash
 git clone https://github.com/gamelongtim-ux/dsh-workflow-runner.git
@@ -54,13 +54,14 @@ dsh plugin --profile desktop add file:"$PWD"
 要装指定版本,和普通 npm 安装一样带版本号:
 
 ```bash
-dsh plugin --profile desktop add dsh-workflow-runner@0.16.2
+dsh plugin --profile desktop add dsh-workflow-runner@0.16.3
 ```
 
-看有哪些版本已经发布:
+看有哪些版本已经发布、哪个是 `latest`:
 
 ```bash
 npm view dsh-workflow-runner versions
+npm view dsh-workflow-runner dist-tags
 ```
 
 > 📌 如果同版本 pnpm `add file:` 不重新拷贝(pnpm 12 的怪行为),改 `package.json` 里的 `version`,或者直接用 `update.cmd`。
@@ -71,7 +72,7 @@ npm view dsh-workflow-runner versions
 
 | 路径 | 在 dsh "添加插件"对话框里粘贴 | 备注 |
 | --- | --- | --- |
-| **npm 包名** *(默认)* | `dsh-workflow-runner` | 已发到 npmjs.org,当前版本 **0.16.2**。国内走镜像源更快,且能锁版本 |
+| **npm 包名** *(默认)* | `dsh-workflow-runner` | 已发到 npmjs.org,`latest` 就是当前版本。国内走镜像源更快,且能锁版本 |
 | **GitHub URL** | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | 永远可用;拉的是最新 `main` HEAD,而不是已发布版本 |
 | **本地路径** | `<本地 clone 的绝对路径>` | 想跟你的本地编辑同步改;搭配 `update.cmd` |
 
