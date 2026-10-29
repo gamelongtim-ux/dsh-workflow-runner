@@ -253,12 +253,30 @@ Write-Host '' -ForegroundColor DarkGray
 Push-Location $repoRoot
 try {
   $ErrorActionPreference = 'Continue'
-  & node (Join-Path $PSScriptRoot 'publish-with-webauth.mjs') 2>&1 | Tee-Object -Variable publishOut
+  # The output goes to a FILE, not to a pipe.
+  #
+  # This is not a style choice. npm's web-2FA flow starts only when npm's
+  # own stdout is a TTY:
+  #
+  #   if (!process.stdin.isTTY || !process.stdout.isTTY) { throw err }
+  #
+  # Piping the wrapper's output into Tee-Object makes its stdout a PIPE, so
+  # the wrapper's guard refuses -- and so would npm's. The child has to
+  # inherit the console directly.
+  $publishLog = Join-Path $env:TEMP "dsh-workflow-runner-publish-$localVersion.log"
+  & node (Join-Path $PSScriptRoot 'publish-with-webauth.mjs') *> $publishLog
   $code = $LASTEXITCODE
+  # The console still gets the output -- read from the file, so the child
+  # keeps the console and the parent does not need a pipe.
+  if (Test-Path $publishLog) {
+    Get-Content $publishLog | ForEach-Object { Write-Host $_ }
+  }
   $ErrorActionPreference = 'Stop'
 } finally {
   Pop-Location
 }
+
+$publishOut = if (Test-Path $publishLog) { Get-Content $publishLog } else { @() }
 
 if ($code -ne 0) {
   $text = ($publishOut | Out-String)
