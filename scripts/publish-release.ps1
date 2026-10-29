@@ -356,16 +356,27 @@ for ($attempt = 1; $attempt -le 15; $attempt++) {
     # 404 while the registry copies the tarball around.
   }
   if ($attempt -lt 15) {
-    Write-Host "    the tarball is not served yet (attempt $attempt/15) — the registry copies it around" -ForegroundColor DarkGray
+    # ASCII only: a non-ASCII character in this console renders as
+    # mojibake, which makes a waiting line look like an error.
+    Write-Host "    the tarball is not served yet (attempt $attempt/15); the registry copies it around" -ForegroundColor DarkGray
     Start-Sleep -Seconds 20
   }
 }
 
 if (-not $published) {
-  Write-Err "the published tarball is not served yet: $tarballUrl"
-  Write-Host '  The version document is usually there even when the tarball is' -ForegroundColor Yellow
-  Write-Host '  not. The registry takes a few minutes to copy it around. Check:' -ForegroundColor Yellow
+  # The PUBLISH SUCCEEDED. npm exited 0 and the registry has the version
+  # document -- what is missing is the tarball, which the registry copies
+  # around for a few minutes afterwards. Calling this a failure sends
+  # people looking for a problem that is not there, and re-publishing is
+  # not possible anyway (the version is taken).
+  Write-Host ''
+  Write-Warn2 "published, but the tarball is not served yet: $tarballUrl"
+  Write-Host '  The PUBLISH SUCCEEDED -- npm exited 0. The registry copies the' -ForegroundColor Yellow
+  Write-Host '  tarball around for a few minutes afterwards, and the version' -ForegroundColor Yellow
+  Write-Host '  document is usually there before it is:' -ForegroundColor Yellow
   Write-Host "    curl -I $tarballUrl" -ForegroundColor DarkGray
+  Write-Host '  Do NOT publish again: the version is taken.' -ForegroundColor Yellow
+  Write-Host ''
   exit 1
 }
 Write-Ok "the tarball is served: $tarballUrl"
