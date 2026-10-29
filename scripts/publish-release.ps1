@@ -253,30 +253,40 @@ Write-Host '' -ForegroundColor DarkGray
 Push-Location $repoRoot
 try {
   $ErrorActionPreference = 'Continue'
-  # The output goes to a FILE, not to a pipe.
+  # The output goes STRAIGHT to the console -- no pipe, no redirection.
   #
   # This is not a style choice. npm's web-2FA flow starts only when npm's
   # own stdout is a TTY:
   #
   #   if (!process.stdin.isTTY || !process.stdout.isTTY) { throw err }
   #
-  # Piping the wrapper's output into Tee-Object makes its stdout a PIPE, so
-  # the wrapper's guard refuses -- and so would npm's. The child has to
-  # inherit the console directly.
-  $publishLog = Join-Path $env:TEMP "dsh-workflow-runner-publish-$localVersion.log"
-  & node (Join-Path $PSScriptRoot 'publish-with-webauth.mjs') *> $publishLog
+  # A pipe breaks that (Tee-Object), and so does PowerShell's `*>` — both
+  # make the child's stdout a FILE or a PIPE instead of the console. The
+  # child has to inherit the terminal untouched.
+  #
+  # The output is therefore NOT captured. The failure analysis below reads
+  # npm's own log file instead, which npm writes anyway.
+  & node (Join-Path $PSScriptRoot 'publish-with-webauth.mjs')
   $code = $LASTEXITCODE
-  # The console still gets the output -- read from the file, so the child
-  # keeps the console and the parent does not need a pipe.
-  if (Test-Path $publishLog) {
-    Get-Content $publishLog | ForEach-Object { Write-Host $_ }
-  }
   $ErrorActionPreference = 'Stop'
 } finally {
   Pop-Location
 }
 
-$publishOut = if (Test-Path $publishLog) { Get-Content $publishLog } else { @() }
+# npm's own log of this run, for the failure analysis below.
+#
+# npm writes one log per command, and the publish's is the newest one that
+# mentions this package -- not simply the newest, which could belong to
+# something else that ran in between.
+$publishOut = @()
+$logDir = Join-Path $env:LOCALAPPDATA 'npm-cache\_logs'
+$npmLog = Get-ChildItem $logDir -Filter '*.log' -ErrorAction SilentlyContinue |
+  Sort-Object LastWriteTime -Descending |
+  Where-Object { Select-String -Path $_.FullName -Pattern $pkgName -Quiet -ErrorAction SilentlyContinue } |
+  Select-Object -First 1
+if ($npmLog -ne $null) {
+  $publishOut = @(Get-Content $npmLog.FullName -ErrorAction SilentlyContinue)
+}
 
 if ($code -ne 0) {
   $text = ($publishOut | Out-String)
