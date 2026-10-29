@@ -8,6 +8,78 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.16.2] — 2026-10-29
+
+### Added
+
+- **The published version reports the concurrency governor's state.**
+  `GET /workflow/api/tool-schema` now carries a `concurrency` array: one
+  entry per provider key, with the cap, the epoch, the in-flight count
+  and the last proven-good level. It is PROCESS-level, so this is the
+  budget every run against that key shares — and the cap it learned is
+  the ceiling those runs' asks are admitted under.
+
+- `scripts/dwf-publish-verify.mjs` — checks the published tarball
+  against the sha1 and sha512 the registry recorded. If the bytes on
+  the CDN hash to those values, then what people download is exactly
+  what was uploaded: no corruption, no substitution, no partial
+  upload. This is the check a publish script cannot do for itself.
+
+### Fixed
+
+- **The publish script broke npm's web-2FA flow by piping its output.**
+  The output went through `| Tee-Object`, which makes the child's
+  stdout a PIPE. npm's web flow starts only when npm's own stdout is a
+  TTY:
+
+      if (!process.stdin.isTTY || !process.stdout.isTTY) { throw err }
+
+  PowerShell's `*>` redirection breaks it the same way. The output now
+  goes straight to the console and the child inherits the terminal
+  untouched; the failure analysis reads npm's own log file instead.
+
+- **The publish reported "failed" for a publish that had succeeded.**
+  The registry is eventually consistent, and consistent in pieces: the
+  version document appears first, the tarball about four minutes later,
+  and the CDN-cached packument after that. Checking `npm view <pkg>
+  versions` right after a publish says "not published" for a version
+  that is already there. The verification now polls the TARBALL, and
+  when it is not served yet it says "published, but the tarball is not
+  served yet" — and that the version is taken, so it must not be
+  published again.
+
+- The console output of the publish script is ASCII now. A non-ASCII
+  dash rendered as mojibake, which made a waiting line look like an
+  error.
+
+### Added (release plumbing)
+
+- `scripts/publish-with-webauth.mjs` — a local proxy that puts the auth
+  URL into the 401's BODY, where npm's web-2FA flow looks for it. The
+  registry puts it in the `npm-notice` HEADER instead, so npm falls
+  through to the classic "Enter OTP:" prompt — and on an account with
+  no authenticator app that prompt wants a RECOVERY CODE, which is
+  what puts the account into npm's 72-hour read-only hold.
+
+- `scripts/publish-release.ps1` now checks that npm 12 is present next
+  to the repo (npm 11 does not read the auth URL out of the body), and
+  routes the publish through the wrapper.
+
+## [0.16.1] — 2026-10-29
+
+### Added
+
+- **The concurrency governor's state is reported.**
+  `GET /workflow/api/tool-schema` carries a `concurrency` array — one
+  entry per provider key, with the cap, the epoch, the in-flight count
+  and the last proven-good level. It is process-level, so this is the
+  budget every run against that key shares.
+
+### Added (checks)
+
+- `scripts/dwf-publish-verify.mjs` — checks a published tarball against
+  the digests the registry recorded.
+
 ## [0.16.0] — 2026-10-28
 
 ### Added

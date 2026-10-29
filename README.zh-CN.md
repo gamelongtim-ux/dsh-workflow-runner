@@ -27,7 +27,9 @@
   - `▶ Run` / `◼ Stop` 按钮
   - 实时 phase 进度、子代理活动、报告列表、事件日志
 
-- **服务端运行时**:spawn 用户脚本为 Node 子进程,stdin/stdout 上跑 JSON-RPC,使用与 dsh `balance` 同样的 key 解析路径调 DeepSeek chat-completion,跑 shell 命令并有可控超时。
+- **服务端运行时**:基于 **ZCode 自己的 `@zcode/dynamic-workflow` 引擎**,原样 vendor 进来(458 个文件,逐字节一致)。引擎是个纯状态机:它把工作流脚本编译出四张图(site / causality / control-flow / hand-off),每个 `agent.ask` 都带着从 `ask<T>` 泛型合成出来的类型化结果契约。运行时使用与 dsh `balance` 同样的 key 解析路径调 DeepSeek chat-completion,跑 shell 命令并有可控超时。
+
+  在引擎之上,本插件补上宿主需要的东西:每个子代理真实的 chat 历史、shell 门禁、artifact 交付物、工作区文件与 git 读取、进程内 channel/future 并发、模型路由、运行中问人、运行中注入代码(`hole<T>`)、结构化 amend、持久化 journal、resume,以及一个**进程级并发治理器**——provider 限流时它会主动收缩请求速率。
 
 ## 安装
 
@@ -37,7 +39,7 @@
 dsh plugin --profile desktop add dsh-workflow-runner
 ```
 
-这会装 npm 上的正式发布版。想跟这个仓库的最新 `main`:
+这会装 npm 上的正式发布版(当前是 **0.16.2**)。想跟这个仓库的最新 `main`:
 
 ```bash
 git clone https://github.com/gamelongtim-ux/dsh-workflow-runner.git
@@ -49,6 +51,18 @@ dsh plugin --profile desktop add file:"$PWD"
 
 要求 **dsh 0.2.0-rc.2 及以上**——已声明为 `engines.dsh`,插件市场能据此显示宿主版本要求,而不是"未声明"。
 
+要装指定版本,和普通 npm 安装一样带版本号:
+
+```bash
+dsh plugin --profile desktop add dsh-workflow-runner@0.16.2
+```
+
+看有哪些版本已经发布:
+
+```bash
+npm view dsh-workflow-runner versions
+```
+
 > 📌 如果同版本 pnpm `add file:` 不重新拷贝(pnpm 12 的怪行为),改 `package.json` 里的 `version`,或者直接用 `update.cmd`。
 
 ## 把这个插件给其他 dsh 用户用
@@ -57,7 +71,7 @@ dsh plugin --profile desktop add file:"$PWD"
 
 | 路径 | 在 dsh "添加插件"对话框里粘贴 | 备注 |
 | --- | --- | --- |
-| **npm 包名** *(默认)* | `dsh-workflow-runner` | 自 **0.1.5** 起已发到 npmjs.org。国内走镜像源更快,且能锁版本 |
+| **npm 包名** *(默认)* | `dsh-workflow-runner` | 已发到 npmjs.org,当前版本 **0.16.2**。国内走镜像源更快,且能锁版本 |
 | **GitHub URL** | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | 永远可用;拉的是最新 `main` HEAD,而不是已发布版本 |
 | **本地路径** | `<本地 clone 的绝对路径>` | 想跟你的本地编辑同步改;搭配 `update.cmd` |
 
@@ -750,6 +764,46 @@ curl -X POST http://127.0.0.1:54912/workflow/api/engine/run \
 
 上面那个 `ask<string>()` 不是装饰:引擎从类型实参合成出 `{"type":"string"}`,把 schema
 交给模型,再拿它校验答案。
+
+### 恢复一次运行
+
+被打断的 run 可以从它自己的 journal 里接着跑:
+
+```bash
+curl -X POST http://127.0.0.1:54912/workflow/api/engine/resume \
+  -H 'content-type: application/json' \
+  -d '{"runId":"<run id>","scriptText":"<逐字节相同的脚本>"}'
+```
+
+脚本必须**逐字节相同**。一个 run 的站点 id 是它 journal 的键,改了脚本等于把新站点对
+上旧答案——所以引擎会拒绝,并把两个哈希都点出来:
+
+```
+cannot resume run <id>: its script changed (recorded hash 37843b70, got
+d55867c0). Resume needs the byte-identical script; to run a revised
+script, start a new run with resume_from instead.
+```
+
+要跑**改过的**脚本、同时还想复用之前的答案,就用 `resume_from` 开一个新 run——
+那是 *amend-resume* 路径,脚本可以不一样。
+
+### 并发治理器
+
+provider 的限流是 **provider 的事实**,不是某个 run 的事实,所以学到的请求速率由所有
+打同一个模型的 run 共享,并且在进程内存活。
+
+provider 限流时(429/503),上限往下压;provider 证明更高的速率能用时,它再爬回来
+——但要**已证明的成功**加上**真实的排队需求**两者同时具备。瞬态失败(5xx、超时)
+**不动**上限:provider 难受一分钟,不该让所有别的 run 陪葬。
+
+状态可以在 `GET /workflow/api/tool-schema` 读到:
+
+```json
+"concurrency": [{"key":"default/deepseek-chat","cap":6,"epoch":1,"lastBad":8}]
+```
+
+额度耗尽**不是**限流:余额不足会直接停掉 run(`ProviderStop`,`kind: "quota"`),
+而不是去收缩谁的速率。
 
 ### 关于上游引擎
 

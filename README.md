@@ -29,10 +29,21 @@ progress to the chat composer dock, a per-turn tail card, and a floating monitor
   - `▶ Run` / `◼ Stop` buttons;
   - live phase pills, sub-agent activity, reported items, event log.
 
-- **A server-side runtime** that spawns the user script as a Node child process,
-  pipes stdio JSON-RPC between them, talks to the DeepSeek chat-completion API
-  using the same key resolution path as the dsh `balance` service, and runs
-  shell commands under controlled timeouts.
+- **A server-side runtime** built on **ZCode's own `@zcode/dynamic-workflow`
+  engine**, vendored here unmodified (458 files, byte-identical). The engine
+  is a pure state machine: it compiles a workflow script into four graphs
+  (site / causality / control-flow / hand-off), and every `agent.ask`
+  carries a typed result contract synthesized from `ask<T>` generics. It
+  talks to the DeepSeek chat-completion API using the same key resolution
+  path as the dsh `balance` service, and runs shell commands under
+  controlled timeouts.
+
+  On top of the engine, this plugin adds what a host needs: real chat
+  history per subagent, shell gates, artifact deliverables, workspace file
+  and git reads, in-process channel/future concurrency, model routing,
+  mid-run human questions, mid-run code injection (`hole<T>`), structural
+  amend, durable journaling, resume, and a process-level concurrency
+  governor that shrinks the request rate when the provider throttles.
 
 ## Install
 
@@ -66,7 +77,7 @@ handing the URL to.
 
 | Path | What the user pastes in dsh's "添加插件" dialog | Notes |
 | --- | --- | --- |
-| **npm name** *(default)* | `dsh-workflow-runner` | Published on npmjs.org since **0.1.5**. Fastest in China through npm's mirror, and locks a version. |
+| **npm name** *(default)* | `dsh-workflow-runner` | Published on npmjs.org. The current release is **0.16.2**. Fastest in China through npm's mirror, and locks a version. |
 | **GitHub URL** | `https://github.com/gamelongtim-ux/dsh-workflow-runner` | Always available; pulls the latest `main` HEAD rather than a released version. |
 | **Local path** | `<absolute path to a cloned checkout>` | Best for users who want to follow your local edits; pair with `update.cmd`. |
 
@@ -84,6 +95,25 @@ also declared as author-facing metadata. dsh itself enforces only
 `@deepseek-ai/dsh-*` peers: it just needs the mount points and services the
 base bundle provides, and a host peer range would risk rejecting a host that
 works fine.
+
+### Installing a specific version
+
+`dsh plugin --profile desktop add` takes a version specifier like any npm
+install:
+
+```bash
+dsh plugin --profile desktop add dsh-workflow-runner@0.16.2
+```
+
+To see what is published:
+
+```bash
+npm view dsh-workflow-runner versions
+```
+
+> 📌 pnpm caches by path, so `add file:"$PWD"` will not re-copy the same
+> version over an existing one. Bump `version` in `package.json`, or use
+> `update.cmd`.
 
 ## Standalone (no dsh required)
 
@@ -994,6 +1024,51 @@ curl -X POST http://127.0.0.1:54912/workflow/api/engine/run \
 `ask<string>()` above is not decoration: the engine synthesises
 `{"type":"string"}` from the type argument, hands the schema to the model,
 and validates the answer against it.
+
+### Resuming a run
+
+A run that was interrupted can be picked up again from its own journal:
+
+```bash
+curl -X POST http://127.0.0.1:54912/workflow/api/engine/resume \
+  -H 'content-type: application/json' \
+  -d '{"runId":"<the run id>","scriptText":"<the byte-identical script>"}'
+```
+
+The script must be **byte-identical**. A run's site ids are keys into its
+journal, so a changed script would pair new sites with old answers — the
+engine refuses instead, naming both hashes:
+
+```
+cannot resume run <id>: its script changed (recorded hash 37843b70, got
+d55867c0). Resume needs the byte-identical script; to run a revised
+script, start a new run with resume_from instead.
+```
+
+To run a **revised** script and still reuse the earlier answers, start a
+new run with `resume_from` — that is the *amend-resume* path, and the
+script may differ.
+
+### The concurrency governor
+
+A provider's rate limit is a fact about the **provider**, not about a run,
+so the learned request rate is shared by every run against the same model
+and lives for the life of the process.
+
+When the provider throttles (429/503), the cap comes down; when the
+provider proves a higher rate works, it climbs back — but only on proven
+success **and** actual demand. A transient failure (a 5xx, a timeout) does
+**not** move the cap, because the provider being unwell for a minute
+should not punish every other run.
+
+The state is readable at `GET /workflow/api/tool-schema`:
+
+```json
+"concurrency": [{"key":"default/deepseek-chat","cap":6,"epoch":1,"lastBad":8}]
+```
+
+A quota error is **not** a throttle: an exhausted balance stops the run
+(`ProviderStop`, `kind: "quota"`) rather than shrinking anyone's rate.
 
 ### A note on the upstream engine
 
