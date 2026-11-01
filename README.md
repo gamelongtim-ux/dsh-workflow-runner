@@ -5,10 +5,15 @@
 </p>
 
 Bring ZCode-style **dynamic-workflows** semantics into the [dsh][dsh] web UI.
-Write a small JS workflow script that uses top-level-await-friendly facade calls
-(`phase` / `log` / `report` / `agent(name).ask(prompt)` / `world.run(cmd, args)`)
-and the plugin runs it in an isolated Node child process, broadcasting live
-progress to the chat composer dock, a per-turn tail card, and a floating monitor.
+
+Write a small TypeScript workflow script that uses top-level-await-friendly facade
+calls (`phase` / `log` / `report` / `agent(name).ask<T>(prompt)` /
+`world.run(cmd, args)`), and ZCode's own engine — vendored here unmodified —
+**compiles it before it runs**: statically analysed into four graphs (site /
+causality / control-flow / hand-off), with every `ask<T>()`'s type argument
+synthesised into a JSON Schema the model has to answer against. The script
+itself runs in an isolated child process, and live progress is broadcast to the
+chat composer dock, a per-turn tail card, and a floating monitor.
 
 [dsh]: https://github.com/deepseek-ai/dsh
 
@@ -16,6 +21,27 @@ progress to the chat composer dock, a per-turn tail card, and a floating monitor
 > The plugin is independent of [`dsh-agent-teams`][dteams] — it does not
 > require it, does not collaborate with it, and will not break if you uninstall it.
 [dteams]: https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams
+
+## Status
+
+The port is **complete and verified against upstream**, not a subset of it.
+
+| | |
+|---|---|
+| **The engine** | ZCode's own `@zcode/dynamic-workflow`, vendored **byte-identical** — 458 + 26 files. `npm run verify:vendor` checks it. |
+| **The model-facing API** | **Equivalent, and measured.** Upstream's 45 facade names are all present; the upstream part is byte-identical; the additions are dsh's. A script using every upstream name compiles. |
+| **The ports** | All **43** required members of `WorkflowHostApi`, `WorkflowDriver`, `JournalStorePort` and `WorkflowReportSink` implemented, plus the optional ones. |
+| **The events** | All **27** upstream events handled — 26 implemented, plus `compaction`, which upstream itself never emits. |
+| **The sandbox** | The same one: upstream's `runWorkflowScript` — a child process with a `vm` cell. |
+| **The authoring rules** | Upstream's diagnostics come with it: reusing one artifact id across two kinds is refused with **9007**. |
+| **On top of the engine** | The host layer upstream keeps in its closed app: actor sessions, a durable journal, resume, amend-resume, 11 model-facing tools, and a process-level concurrency governor. |
+| **Checks** | `node scripts/run-all-checks.mjs` — **31** checks, each one adversarial. |
+
+Upstream's own test suite passes against the vendored engine: **38 files /
+1983 tests**, plus **13/13** byte-identical lowering goldens.
+
+The full analysis is in
+[`docs/dynamic-workflow-port.md`](docs/dynamic-workflow-port.md).
 
 ## What you get
 

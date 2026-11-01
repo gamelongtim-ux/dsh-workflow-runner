@@ -238,7 +238,7 @@ GitHub 的 tag 取（tag 全在，`v0.15.4` … `v0.16.3`）。
   harvest），引擎校验后回 `accept`，journal 落 typed 结果行。
 - **作者面全绿**：`samples/dwf/` 33 个 `.dwf.ts` 全部编译通过；
   `samples/dwf-negative/` 2 个负例全部**按预期诊断码**失败。
-  一条命令看全部：`node scripts/run-all-checks.mjs`（32 个检查脚本）。
+  一条命令看全部：`node scripts/run-all-checks.mjs`（31 个检查脚本）。
 - **旧路径没被牺牲**：`samples/` 下的 25 个 `.mjs` 与 5 个 `.ts` 一个字节没动，
   `node scripts/legacy-smoke.mjs` 照常通过。
 - **插件真的会激活**（v0.15.2/0.15.3 修的两个 bug 都在这条线上）：

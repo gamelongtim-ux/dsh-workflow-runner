@@ -5,15 +5,39 @@
 </p>
 
 把 ZCode 风格的 **dynamic-workflows** 语义搬进 [dsh][dsh] Web UI。
-写一小段 JS workflow 脚本,使用顶层 await 友好的 facade
-(`phase` / `log` / `report` / `agent(name).ask(prompt)` / `world.run(cmd, args)`),
-插件把它跑在隔离的 Node 子进程里,实时把进度广播到聊天输入区按钮、每轮尾巴卡片和浮动监控点上。
+
+写一小段 TypeScript 工作流脚本,使用顶层 await 友好的 facade
+(`phase` / `log` / `report` / `agent(name).ask<T>(prompt)` /
+`world.run(cmd, args)`)。ZCode 自己的引擎(原样 vendor 进来)**先编译再运行**:
+静态分析出四张图(site / causality / control-flow / hand-off),每个
+`ask<T>()` 的类型实参都会被合成成一份 JSON Schema,模型必须照着它作答。
+脚本本身跑在隔离的子进程里,实时把进度广播到聊天输入区按钮、每轮尾巴卡片和浮动监控点上。
 
 [dsh]: https://github.com/deepseek-ai/dsh
 
 > **目标宿主**:dsh **桌面版** profile,**V0.2.0-rc.2** 及以上版本。
 > 与 [`dsh-agent-teams`][dteams] 完全独立 —— 不依赖它,不与之协作,卸了它本插件照常工作。
 [dteams]: https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams
+
+## 现状
+
+移植**已完成，并且是对着上游验证过的**——不是上游功能的一个子集。
+
+| | |
+|---|---|
+| **引擎** | ZCode 自己的 `@zcode/dynamic-workflow`，**逐字节** vendor 进来——458 + 26 个文件。`npm run verify:vendor` 随时可查。 |
+| **模型面 API** | **等价，而且可测量。** 上游的 45 个 facade 名字一个不缺，上游那段逐字节未改，插件新增的都是 dsh 扩展。用遍所有上游名字的脚本能编译。 |
+| **四个端口** | `WorkflowHostApi`、`WorkflowDriver`、`JournalStorePort`、`WorkflowReportSink` 的 **43 个必需成员**全部实现，可选成员也在。 |
+| **事件** | 上游 **27 个**事件全部处理——26 个实现，加上 `compaction`，而那个是上游自己从不发出的占位符。 |
+| **沙箱** | 同一套：上游的 `runWorkflowScript`——子进程 + `vm` cell。 |
+| **编写规则** | 上游的诊断码也一起过来了：同一个 artifact id 用两种 kind 会被 **9007** 拒绝。 |
+| **引擎之上** | 上游记在闭源 app 里的那层宿主能力：子代理会话、持久化 journal、resume、amend-resume、11 个模型面 tool，以及进程级并发治理器。 |
+| **检查** | `node scripts/run-all-checks.mjs`——**31** 个检查，每一个都是对抗性的。 |
+
+上游自己的测试套件在 vendor 进来的引擎上全过：**38 文件 / 1983 测试**，
+外加 **13/13** 逐字节一致的 lowering 黄金。
+
+完整分析见 [`docs/dynamic-workflow-port.md`](docs/dynamic-workflow-port.md)。
 
 ## 你会拿到
 
