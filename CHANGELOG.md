@@ -8,6 +8,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.16.4] — 2026-11-01
+
+### Added
+
+- **The facade is now compared against upstream's, mechanically.**
+  "Is this the same feature as ZCode's?" deserves a measurement rather
+  than an assertion, so this measures it.
+
+  Upstream's `FACADE_DTS` is "the single source of truth for the
+  model-facing API". The plugin builds its facade by APPENDING to it, so
+  the question has a precise answer: does the plugin's facade still
+  contain every name upstream declares? It does — none are missing, and
+  the upstream part is byte-identical. The additions are the dsh
+  extensions (`askUser`, `escalate`, `route`, `models`, `stages`,
+  `concurrency.stat`, `constants`), none of which upstream has.
+
+  And the proof that matters is not the name list but the COMPILER: a
+  script using every upstream name — `model`, `agent`, `log`, `report`,
+  `phase`, all six artifact kinds, all three `files.*` reads, all four
+  `git.*` reads, and `world.run` — compiles against the plugin's facade,
+  producing all four graphs.
+
+  It also asserts that upstream's AUTHORING RULES came across with the
+  engine: an artifact id reused across two kinds is refused with
+  upstream's diagnostic 9007, and a `report` tag naming a file artifact
+  is refused.
+
+- `scripts/dwf-facade-compare-self-test.mjs` — proves that check can
+  actually FAIL. It renames upstream's `world.run`, rebuilds the engine,
+  and asserts the comparison fails (it is caught by "the script does not
+  compile", which is deeper than the name list); then it restores and
+  asserts it passes again. A check that cannot fail is not a check.
+
+### Fixed
+
+- The published 0.16.3 shipped a README that named 0.16.2 as the current
+  release, because the README ships inside the package. This release
+  points at the `latest` dist-tag instead, which cannot go stale.
+
 ## [0.16.3] — 2026-10-29
 
 ### Changed

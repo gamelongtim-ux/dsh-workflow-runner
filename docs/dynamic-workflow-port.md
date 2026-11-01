@@ -214,11 +214,31 @@ GitHub 的 tag 取（tag 全在，`v0.15.4` … `v0.16.3`）。
   唯一改写是 harness 的 import specifier（26 文件里的 2 个）。`npm run verify:vendor` 随时可查。
 - **上游测试全绿**：`npx vitest run tests` → **38 文件 / 1983 测试全过**；
   `node verify-goldens.mjs` → **13/13 lowering 黄金逐字节一致**（在 `.spike/zcode-engine/`）。
+- **facade 与上游等价（可测量）**：上游的 `FACADE_DTS` 是「model-facing API 的唯一真相来源」，
+  插件的 facade 是**在它后面追加**的。`scripts/dwf-facade-compare.mjs` 断言：
+  - 上游的 **45 个名字一个不缺**，且上游那段**逐字节未改**；
+  - 插件新增的名字**全是 dsh 扩展**（`askUser`、`escalate`、`route`、`models`、`stages`、
+    `concurrency.stat`、`constants`），上游一个都没有；
+  - **一个用遍所有上游名字的脚本能编译**（`model` / `agent` / `log` / `report` / `phase` /
+    六种 artifact / 三种 `files.*` / 四种 `git.*` / `world.run`），
+    产出四张图 `{site:10, causality:8, controlFlow:9, handoff:1}`；
+  - **上游的编写规则也一起过来了**：同一个 artifact id 用两种 kind 被 **9007** 拒绝，
+    `report` 的 tag 指向 file 产物被拒。
+- **这个检查自己会被证伪**：`scripts/dwf-facade-compare-self-test.mjs` 把上游的 `world.run`
+  改名、重建引擎，然后断言比较检查**确实失败**（它被「脚本编译不了」这条抓住，
+  比名字清单更深），再恢复并断言又通过。**不会失败的检查不是检查。**
+- **执行模型与上游一致**：引擎路径用的就是上游的 `runWorkflowScript`（child process + vm cell），
+  降级后的脚本体原样交给它，harness 不重复降级。沙箱、`Date.now`/`Math.random` 禁用、
+  五个 host 函数——全是上游那套。
+- **引擎端口全覆盖**：四个端口的 **43 个成员**（9 + 7 + 16 + 11）全部实现，
+  `scripts/dwf-port-coverage.mjs` 报 0 问题。
+- **引擎事件全覆盖**：上游 **27 个事件**里 26 个被处理；剩下那个 `compaction` 是上游自己的占位符
+  （原文：*「v1 从不发出，仅占位以便将来非破坏地加入」*）。
 - **本移植的端到端**：typed ask 的 schema 由 `ask<T>` 泛型合成（含 JSDoc description 的
   harvest），引擎校验后回 `accept`，journal 落 typed 结果行。
 - **作者面全绿**：`samples/dwf/` 33 个 `.dwf.ts` 全部编译通过；
   `samples/dwf-negative/` 2 个负例全部**按预期诊断码**失败。
-  一条命令看全部：`node scripts/run-all-checks.mjs`（10 个检查脚本）。
+  一条命令看全部：`node scripts/run-all-checks.mjs`（32 个检查脚本）。
 - **旧路径没被牺牲**：`samples/` 下的 25 个 `.mjs` 与 5 个 `.ts` 一个字节没动，
   `node scripts/legacy-smoke.mjs` 照常通过。
 - **插件真的会激活**（v0.15.2/0.15.3 修的两个 bug 都在这条线上）：

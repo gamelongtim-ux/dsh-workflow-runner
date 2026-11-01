@@ -17,6 +17,8 @@ const CHECKS = [
   ['legacy-smoke.mjs', 'legacy path regression'],
   ['dwf-compile-check.mjs', 'compile API'],
   ['dwf-port-coverage.mjs', 'engine ports covered'],
+  ['dwf-facade-compare.mjs', 'the facade matches upstream'],
+  ['dwf-facade-compare-self-test.mjs', 'that check can fail'],
   ['dwf-facade-drift-check.mjs', 'facades agree'],
   ['dwf-failure-check.mjs', 'engine failure paths'],
   ['dwf-observation-check.mjs', 'the engine\'s observations'],
