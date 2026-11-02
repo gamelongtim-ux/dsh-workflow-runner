@@ -58,6 +58,35 @@ if (base === undefined) {
     check('it reports the skill view', src.includes('collectSkillNames'));
     check('it reports the tool registration', src.includes('registration: toolRegistration'));
   }
+
+  console.log('\n3. the skill definition satisfies the host\'s validator');
+  {
+    // The host validates a runtime skill before filing it:
+    //   validateRuntimeSkill -> a name matching SKILL_NAME, a NON-EMPTY
+    //   description, and a valid invocation.
+    //
+    // A missing description throws INSIDE register(), which is why the
+    // skill silently did not exist -- on the host or in any agent, and
+    // why every check that read the registry reported an absence without
+    // saying why.
+    const src = await import('node:fs').then((fs) =>
+      fs.readFileSync('lib/plugin.js', 'utf8'),
+    );
+    const definition = src.match(/name: 'dynamic-workflows',\s*\n(?:\s*[^\n]*\n)*?\s*\};/);
+    check('the skill definition is found', definition !== null);
+    if (definition !== null) {
+      const body = definition[0];
+      // The description line must be INSIDE this definition -- a match
+      // anywhere in the file would find some other description.
+      const m = /description:\s*'([^']*)'/.exec(body);
+      check(
+        'it declares a non-empty description',
+        m !== null && m[1].trim().length > 0,
+        m === null ? '(no description — the host rejects this)' : `${m[1].trim().length} chars`,
+      );
+      check('it declares the invocation', body.includes('modelInvocable'));
+    }
+  }
 } else {
   console.log(`\n=== the chat path, against ${base} ===`);
 
