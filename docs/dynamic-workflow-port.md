@@ -208,6 +208,72 @@ GitHub 的 tag 取（tag 全在，`v0.15.4` … `v0.16.3`）。
 403 是 npm 对「bypass-2FA 的 token 不能管理账号」的限制；**401 只是要交互式 2FA**。
 账号**没有被写锁**——差点把 403 误读成「72 小时只读」。
 
+### N. 聊天路径：工具注册了，模型却看不见（2026-11-02）
+
+这是整个移植里**最难查**的一个 bug，因为它藏在「注册成功」和「模型能用」之间的缝隙里。
+
+**症状**：在聊天里发消息，宿主完全不响应工作流。但 `/workflow/` 页面能开、`/workflow` 斜杠命令能跑、宿主注册表里 11 个 tool 一个不缺。
+
+**决定性证据**不是插件自己的诊断，而是**这个会话自己的时间线**（`~/.dsh/storages/session_projcache/.../contextTimeline`）：
+
+```
+1500 次模型请求
+模型被提供的工具：ops_bash, edit, read, todo_write, pwsh, write, grep, bash, ops_inspect_local_file
+callNames: {}
+```
+
+**我们的 11 个 tool 一个都没被提供。** 42 轮、1500 次请求，模型**一次机会都没有**。
+
+**根因**：宿主的工具注册表是 **scope-aware** 的。
+
+```js
+view(scope) {
+  const inherited = new Map(this.layers.global.tools.entries());   // 宿主层
+  for (const layer of layers) { ... }                              // scope 链
+  if (layers.every((layer) => layer.admits(name))) visible.set(name, definition);
+  if (own !== undefined) for (const [name, definition] of own.tools.entries()) {
+    visible.set(name, definition);        // ← agent 自己那层：无条件可见
+  }
+}
+```
+
+在宿主层注册的 tool 落在 **global 层**，要过 preset 每一层的 `admits`；而 **agent 自己 scope 层**的 tool **无条件可见**。
+
+**宿主自己的 agent-team 插件就是这么做的**：
+
+```js
+const scoped = agent.ctx;
+scoped.tools.register(defineTool({ ... }));
+```
+
+所以本移植改成**注册两次**：宿主上一次（存在、可派发），**每个 agent 的 scope 里一次**（模型看得见）。新 agent 通过 `agent/created` 事件获得。
+
+#### 这一个 bug 里叠了四个问题
+
+| # | 现象 | 真因 | 形态 |
+|---|---|---|---|
+| 1 | 聊天发消息没反应 | tool 只在宿主层注册，被 scope 过滤挡掉 | **注册成功，模型看不见** |
+| 2 | 诊断永远返回空 | 服务名写错了（`ctx.get('agent')`，实际是 **`agents`**） | **仪器坏了，空结果被当成答案** |
+| 3 | skill 从未出现 | 缺 `description`，`register()` 抛异常被 warning 分支吞掉 | **从未被创建** |
+| 4 | skill 可见但加载不了 | 缺 `source`，加载器的 `validateDefinition` 拒绝 | **可见但不可用** |
+
+第 2 条是最要命的：**仪器读错了名字，还把空结果当结论报了出来**。第 3、4 条则是「缺席」和「存在」两个层面，**读注册表永远发现不了**——第 3 条里 skill 连 global 层都没有，第 4 条里它在每一层都在、只是加载不了。
+
+**教训：缺席不是原因。** 一个「缺席」的读数只说明某处出了问题，不告诉你**哪里**。真正定位靠的是让仪器报告**具体事实**（agent 的 scope 键是什么、注册抛了什么错、global 视图和 agent 视图各有什么）。
+
+#### 留下三道防线
+
+- `GET /workflow/api/tool-schema` 报告**三件事**：宿主注册表有什么、**每个活 agent 看得见什么**（宿主自己的 `Tool.listTools` 就是这么问的）、skill 落在哪一层。
+- `scripts/dwf-chat-path-check.mjs` 断言 skill 定义满足宿主的校验规则（`description` 非空、`source` 是字符串）——**每一条都实测过它会失败**。
+- `scripts/dwf-skill-contract-check.mjs` 用 **skill 自己的契约**写一个工作流并跑通：声明带逐字段注释的 interface（那些注释会变成子代理读到的 schema）、agent 名唯一、每 phase 有活、`return` 结果。
+
+**实测**：typed ask 精确返回结构化值——
+
+```json
+{ "haiku": { "lines": [...], "season": "autumn" },
+  "critique": { "weakness": "Predictable, clichéd seasonal imagery", "confidence": 0.7 } }
+```
+
 ### 已验证的硬事实
 
 - **上游保真**：`packages/dynamic-workflow/src` 与 `zai-org/ZCode` **逐字节一致**（458 文件），

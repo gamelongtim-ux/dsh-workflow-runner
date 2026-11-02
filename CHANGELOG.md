@@ -8,6 +8,86 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > git tags / GitHub `main`; the package name was never published to
 > registry.npmjs.org. **0.1.5 was the first version on npm.**
 
+## [0.17.7] — 2026-11-02
+
+### Fixed
+
+- **The chat could not reach the plugin at all.** Typing a message did
+  nothing: the model was never offered the plugin's eleven tools, so it
+  never called them.
+
+  The host's tool registry is scope-aware. A tool registered on the HOST
+  context lands in the global layer; an agent's view is its own scope
+  layer plus that scope's chain, and the global layer's entries are
+  visible only when every layer on the chain ADMITS them. The agent
+  preset's layers carry their own restrictions, so a host-registered tool
+  can be filtered out of the chat entirely — while still being present in
+  the registry, and still being reported by every check that reads the
+  registry.
+
+  A tool in the agent's OWN scope is visible unconditionally:
+  `view(scope)` adds that layer's entries without the admits test. The
+  host's own agent-team plugin registers its tools exactly that way
+  (`scoped.tools.register(...)` with `scoped = agent.ctx`), for precisely
+  this reason.
+
+  So the tools are now registered twice: once on the host (so they exist
+  and are dispatchable) and once per agent (so the model can see and call
+  them). New agents get them through the `agent/created` event, and a
+  disposed agent's registrations are released.
+
+- **The skill was never created.** The host validates a runtime skill
+  before filing it, and rejected the plugin's for want of a description
+  — inside `register()`, so the throw was swallowed and the skill simply
+  did not exist: not on the host, not in any agent, not in any registry
+  view.
+
+- **The skill was visible but could not be loaded.** The host's LOADER
+  validates a definition separately from the registry's validator, and
+  requires `source` to be a string. `register()` fills in `provider`, but
+  nothing fills in `source`. So the skill appeared in every view and
+  then failed to load: "loaded skill \"dynamic-workflows\" source must be
+  a string". That is the worst shape a failure can take — every presence
+  check passed.
+
+### Added
+
+- `GET /workflow/api/tool-schema` now reports three things instead of
+  one: what the host's registry holds, what **each live agent** sees
+  (the host answers the same question through its own `Tool.listTools`
+  inspect provider), and where the skill landed.
+
+- `scripts/dwf-chat-path-check.mjs` — asserts the skill definition
+  satisfies the host's validator: a non-empty description and a `source`,
+  both inside THAT definition. Each assertion was verified by removing
+  the field.
+
+- `scripts/dwf-skill-contract-check.mjs` — writes a workflow against the
+  SKILL's own rules and runs it: a declared interface with per-field doc
+  comments (which become the schema the subagent reads), unique agent
+  names, one phase per ask, and a return value.
+
+  Measured: the typed asks came back as values, not prose —
+  `{ haiku: { lines: [...], season: "autumn" },
+     critique: { weakness: "Predictable, clichéd seasonal imagery", confidence: 0.7 } }`
+
+### A lesson worth keeping
+
+Four faults were stacked in that one bug, and two of them were the
+DIAGNOSTIC's fault rather than the plugin's:
+
+- the agent view asked for a service named `agent` when the service is
+  `agents`, so it always reported an empty list — and an empty list was
+  reported as if it were the answer;
+- the skill view asked `collectFresh` when the host's own skill tool asks
+  `ctx.skills.list({ scope })`.
+
+An absence is not a cause. A read that says "not there" says that
+something is wrong, not where. What located the fault was making the
+instrument report facts: which layer a registration landed in, what
+`register()` threw, what the global view held against what the agent's
+view held.
+
 ## [0.16.4] — 2026-11-01
 
 ### Added
