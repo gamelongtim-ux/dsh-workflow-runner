@@ -23,6 +23,7 @@ const CHECKS = [
   ['dwf-failure-check.mjs', 'engine failure paths'],
   ['dwf-observation-check.mjs', 'the engine\'s observations'],
   ['dwf-chat-path-check.mjs', 'the chat path'],
+  ['dwf-tool-output-check.mjs', 'the tool outputs survive JSON'],
   ['dwf-governor-check.mjs', 'the concurrency governor'],
   ['dwf-governor-runtime-check.mjs', 'the governor, in a real run'],
   ['dwf-hole-fill-check.mjs', 'engine hole fill'],
