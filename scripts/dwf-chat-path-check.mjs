@@ -85,6 +85,18 @@ if (base === undefined) {
         m === null ? '(no description — the host rejects this)' : `${m[1].trim().length} chars`,
       );
       check('it declares the invocation', body.includes('modelInvocable'));
+      // `source` is a classification label ("bundled", "project-dsh",
+      // "custom"). The host's LOADER requires it to be a string:
+      // validateDefinition rejects a loaded skill whose source is not.
+      // `register()` fills in `provider`, but nothing fills in `source` --
+      // so a runtime skill that omits it registers and then fails to LOAD.
+      const source = /source:\s*'([^']*)'/.exec(body);
+      check(
+        'it declares a source',
+        source !== null && source[1].trim().length > 0,
+        source === null ? '(no source — the host cannot load it)' : source[1],
+      );
+      check('it declares the content', /content:\s*SKILL_CONTENT/.test(body));
     }
   }
 } else {
